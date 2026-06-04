@@ -250,9 +250,6 @@ async function startWhatsAppConnection() {
 
         const jid = msg.key.remoteJid;
         
-        // Responder apenas a DMs (Ignorar Grupos e Listas de Transmissão por padrão)
-        if (!jid.endsWith('@s.whatsapp.net')) continue;
-
         // Extrair texto da mensagem
         const text = msg.message?.conversation || 
                      msg.message?.extendedTextMessage?.text || 
@@ -264,6 +261,9 @@ async function startWhatsAppConnection() {
         stats.totalReceived++;
         broadcastStats();
         logToUI('WHATSAPP', `Mensagem recebida de ${jid}: "${text}"`);
+
+        // Responder apenas a DMs (Ignorar Grupos e Listas de Transmissão por padrão)
+        if (!jid.endsWith('@s.whatsapp.net')) continue;
 
         // Executar Inteligência Artificial se ativa
         if (settings.aiEnabled && settings.geminiApiKey) {
