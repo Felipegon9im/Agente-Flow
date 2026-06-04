@@ -1,0 +1,47 @@
+{
+  "name": "zapflow-ai",
+  "version": "1.0.0",
+  "description": "WhatsApp agent integrated with N8N and powered by Gemini AI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.8.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^42.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.zapflow.ai",
+    "productName": "ZapFlow AI",
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZapFlow AI"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "styles.css",
+      "renderer.js",
+      "package.json"
+    ]
+  }
+}
