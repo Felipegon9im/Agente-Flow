@@ -56,6 +56,15 @@
           </svg>
           Ferramentas N8N
         </button>
+        <button class="nav-item" data-tab="scheduler">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Agendador
+        </button>
         <button class="nav-item" data-tab="console">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"/>
@@ -380,6 +389,91 @@
                     <!-- Gerado dinamicamente -->
                     <tr>
                       <td colspan="5" class="empty-table">Nenhuma ferramenta N8N cadastrada ainda.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+        </section>
+
+        <!-- ABA: AGENDADOR DE MENSAGENS -->
+        <section class="tab-panel" id="scheduler-panel">
+          <div class="panel-layout flex-column">
+            
+            <!-- Criar agendamento -->
+            <div class="panel-section">
+              <h3>Programar Novo Envio Recorrente</h3>
+              <p class="section-desc">Agende avisos ou materiais informativos nos grupos ou contatos do WhatsApp.</p>
+              
+              <form id="scheduler-form" class="tool-form-grid">
+                <input type="hidden" id="sched-edit-id" value="">
+                
+                <div class="form-group flex-2">
+                  <label for="sched-target">Destinatário (ID do Grupo ou Telefone)</label>
+                  <input type="text" id="sched-target" placeholder="ex: 120363024927230497@g.us ou 5511999999999" required>
+                  <small>Use o ID do grupo copiado nos logs (termina em @g.us) ou o telefone com DDI (ex: 55...).</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="sched-type">Tipo de Automação</label>
+                  <select id="sched-type">
+                    <option value="interval">Por Intervalo de Tempo</option>
+                    <option value="daily">Horário Fixo Diário</option>
+                  </select>
+                </div>
+
+                <!-- Campos dinâmicos de Intervalo -->
+                <div class="form-group" id="sched-interval-val-group">
+                  <label for="sched-interval-val">Frequência (Valor)</label>
+                  <input type="number" id="sched-interval-val" min="1" value="1">
+                </div>
+
+                <div class="form-group" id="sched-interval-unit-group">
+                  <label for="sched-interval-unit">Unidade</label>
+                  <select id="sched-interval-unit">
+                    <option value="minutes">Minuto(s)</option>
+                    <option value="hours" selected>Hora(s)</option>
+                    <option value="days">Dia(s)</option>
+                  </select>
+                </div>
+
+                <!-- Campo dinâmico para Daily -->
+                <div class="form-group" id="sched-daily-time-group" style="display: none;">
+                  <label for="sched-daily-time">Horário de Disparo (HH:MM)</label>
+                  <input type="time" id="sched-daily-time">
+                </div>
+
+                <div class="form-group flex-2 w-full" style="grid-column: span 2;">
+                  <label for="sched-message">Conteúdo da Mensagem</label>
+                  <textarea id="sched-message" rows="3" placeholder="Escreva a mensagem que deseja enviar recorrentemente..." required></textarea>
+                </div>
+
+                <div class="form-group-button" style="grid-column: span 2; margin-top: 8px;">
+                  <button type="submit" class="btn btn-primary" id="btn-save-sched">Salvar Programação</button>
+                  <button type="button" class="btn btn-secondary" id="btn-cancel-sched-edit" style="display:none;">Cancelar Edição</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Listagem de agendamentos -->
+            <div class="panel-section flex-1">
+              <h3>Automações de Mensagens Ativas</h3>
+              <div class="tools-table-container">
+                <table class="tools-table" id="schedules-table">
+                  <thead>
+                    <tr>
+                      <th>Destinatário</th>
+                      <th>Mensagem</th>
+                      <th>Tipo / Regra</th>
+                      <th>Último Envio</th>
+                      <th>Próximo Envio</th>
+                      <th style="width: 260px; text-align: center;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="schedules-table-body">
+                    <tr>
+                      <td colspan="6" class="empty-table">Nenhum disparo agendado cadastrado ainda.</td>
                     </tr>
                   </tbody>
                 </table>

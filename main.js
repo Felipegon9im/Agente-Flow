@@ -54,7 +54,8 @@ function loadSettings() {
     temperature: 0.7,
     n8nTools: [],
     expressPort: 3003,
-    aiEnabled: true
+    aiEnabled: true,
+    scheduledMessages: []
   };
 
   try {
@@ -425,6 +426,68 @@ async function handleAIMessage(jid, userText) {
   }
 }
 
+// --- Motor de Agendamento Nativo ---
+function calculateNextRun(schedule) {
+  if (schedule.type === 'interval') {
+    let multiplier = 60 * 1000; // Padrão: minutos
+    if (schedule.intervalUnit === 'hours') {
+      multiplier = 60 * 60 * 1000;
+    } else if (schedule.intervalUnit === 'days') {
+      multiplier = 24 * 60 * 60 * 1000;
+    }
+    return Date.now() + (parseInt(schedule.intervalValue, 10) * multiplier);
+  } else if (schedule.type === 'daily') {
+    if (!schedule.dailyTime) return Date.now() + 24 * 60 * 60 * 1000;
+    const [hours, minutes] = schedule.dailyTime.split(':').map(Number);
+    const next = new Date();
+    next.setHours(hours, minutes, 0, 0);
+    if (next.getTime() <= Date.now()) {
+      // Já passou hoje, programa para amanhã
+      next.setDate(next.getDate() + 1);
+    }
+    return next.getTime();
+  }
+  return Date.now();
+}
+
+async function checkScheduledMessages() {
+  if (!sock || connectionStatus !== 'connected') {
+    return;
+  }
+
+  const now = Date.now();
+  let updated = false;
+
+  const list = settings.scheduledMessages || [];
+  for (const schedule of list) {
+    if (schedule.enabled && schedule.nextRun && now >= schedule.nextRun) {
+      logToUI('SYSTEM', `Disparando mensagem agendada (ID: ${schedule.id}) para ${schedule.target}`);
+      try {
+        await sock.sendMessage(schedule.target, { text: schedule.message });
+        
+        schedule.lastRun = now;
+        schedule.nextRun = calculateNextRun(schedule);
+        updated = true;
+        
+        stats.totalSent++;
+        broadcastStats();
+      } catch (err) {
+        logToUI('SYSTEM', `Erro ao disparar mensagem agendada (ID: ${schedule.id}): ${err.message}`);
+        // Proteção: avança 2 minutos se falhar para não travar o loop
+        schedule.nextRun = now + 2 * 60 * 1000;
+        updated = true;
+      }
+    }
+  }
+
+  if (updated) {
+    saveSettings({ scheduledMessages: list });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('schedules-update', list);
+    }
+  }
+}
+
 // --- Criação da Janela do Electron ---
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -465,6 +528,9 @@ app.whenReady().then(() => {
   } else {
     logToUI('WHATSAPP', 'Nenhuma sessão ativa encontrada. Escaneie o QR Code na aba WhatsApp.');
   }
+
+  // Iniciar Loop do Agendador Nativo (Verifica a cada 30 segundos)
+  setInterval(checkScheduledMessages, 30000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -548,4 +614,99 @@ ipcMain.on('request-whatsapp-status', (event) => {
 
 ipcMain.on('request-stats', (event) => {
   event.reply('stats-update', stats);
+});
+
+// Agendador Nativo IPCs
+ipcMain.handle('schedule-save', (event, scheduleData) => {
+  if (!settings.scheduledMessages) settings.scheduledMessages = [];
+  
+  const newSchedule = {
+    id: scheduleData.id || Date.now().toString(),
+    target: scheduleData.target.trim(),
+    message: scheduleData.message.trim(),
+    type: scheduleData.type,
+    intervalValue: parseInt(scheduleData.intervalValue, 10) || 1,
+    intervalUnit: scheduleData.intervalUnit || 'hours',
+    dailyTime: scheduleData.dailyTime || '',
+    enabled: scheduleData.enabled !== undefined ? scheduleData.enabled : true,
+    lastRun: scheduleData.lastRun || null
+  };
+  
+  newSchedule.nextRun = calculateNextRun(newSchedule);
+  
+  if (scheduleData.id) {
+    const idx = settings.scheduledMessages.findIndex(s => s.id === scheduleData.id);
+    if (idx !== -1) {
+      settings.scheduledMessages[idx] = newSchedule;
+    } else {
+      settings.scheduledMessages.push(newSchedule);
+    }
+  } else {
+    settings.scheduledMessages.push(newSchedule);
+  }
+  
+  saveSettings({ scheduledMessages: settings.scheduledMessages });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('schedules-update', settings.scheduledMessages);
+  }
+  
+  logToUI('SYSTEM', `Agendamento salvo com sucesso (ID: ${newSchedule.id})`);
+  return true;
+});
+
+ipcMain.handle('schedule-toggle', (event, id, enabled) => {
+  const list = settings.scheduledMessages || [];
+  const schedule = list.find(s => s.id === id);
+  if (schedule) {
+    schedule.enabled = enabled;
+    if (enabled) {
+      schedule.nextRun = calculateNextRun(schedule);
+    }
+    saveSettings({ scheduledMessages: list });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('schedules-update', list);
+    }
+    logToUI('SYSTEM', `Agendamento ${id} ${enabled ? 'ativado' : 'pausado'}`);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('schedule-trigger-now', async (event, id) => {
+  const list = settings.scheduledMessages || [];
+  const schedule = list.find(s => s.id === id);
+  if (schedule && sock && connectionStatus === 'connected') {
+    logToUI('SYSTEM', `Gatilho manual disparado para agendamento ${id}`);
+    try {
+      await sock.sendMessage(schedule.target, { text: schedule.message });
+      schedule.lastRun = Date.now();
+      schedule.nextRun = calculateNextRun(schedule);
+      saveSettings({ scheduledMessages: list });
+      
+      stats.totalSent++;
+      broadcastStats();
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('schedules-update', list);
+      }
+      return true;
+    } catch (err) {
+      logToUI('SYSTEM', `Erro no disparo manual do agendamento ${id}: ${err.message}`);
+      throw err;
+    }
+  }
+  throw new Error('Agendamento não encontrado ou WhatsApp desconectado.');
+});
+
+ipcMain.handle('schedule-delete', (event, id) => {
+  if (!settings.scheduledMessages) return false;
+  settings.scheduledMessages = settings.scheduledMessages.filter(s => s.id !== id);
+  saveSettings({ scheduledMessages: settings.scheduledMessages });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('schedules-update', settings.scheduledMessages);
+  }
+  logToUI('SYSTEM', `Agendamento excluído (ID: ${id})`);
+  return true;
 });

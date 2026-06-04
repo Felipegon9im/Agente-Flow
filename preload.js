@@ -18,5 +18,12 @@ contextBridge.exposeInMainWorld('api', {
 
   // Requisição de Estado Atual
   requestStatus: () => ipcRenderer.send('request-whatsapp-status'),
-  requestStats: () => ipcRenderer.send('request-stats')
+  requestStats: () => ipcRenderer.send('request-stats'),
+
+  // Agendador de Mensagens
+  saveSchedule: (scheduleData) => ipcRenderer.invoke('schedule-save', scheduleData),
+  toggleSchedule: (id, enabled) => ipcRenderer.invoke('schedule-toggle', id, enabled),
+  triggerScheduleNow: (id) => ipcRenderer.invoke('schedule-trigger-now', id),
+  deleteSchedule: (id) => ipcRenderer.invoke('schedule-delete', id),
+  onSchedulesUpdate: (callback) => ipcRenderer.on('schedules-update', (event, list) => callback(list))
 });

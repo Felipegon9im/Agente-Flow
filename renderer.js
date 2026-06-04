@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initN8NToolsUI();
   renderToolsTable();
 
+  // Inicializar Agendador UI
+  initSchedulerUI();
+  renderSchedulesTable();
+
   // Inicializar Console de Logs
   initConsoleUI();
 
@@ -462,6 +466,205 @@ function animateStatChange(id) {
 }
 
 // A tabela de ferramentas é renderizada diretamente na inicialização do DOMContentLoaded.
+
+// --- Agendador Nativo UI ---
+function initSchedulerUI() {
+  const typeSelect = document.getElementById('sched-type');
+  const intervalValGroup = document.getElementById('sched-interval-val-group');
+  const intervalUnitGroup = document.getElementById('sched-interval-unit-group');
+  const dailyTimeGroup = document.getElementById('sched-daily-time-group');
+  const schedForm = document.getElementById('scheduler-form');
+  const btnCancel = document.getElementById('btn-cancel-sched-edit');
+
+  // Alternar campos conforme tipo
+  typeSelect.addEventListener('change', () => {
+    if (typeSelect.value === 'interval') {
+      intervalValGroup.style.display = 'flex';
+      intervalUnitGroup.style.display = 'flex';
+      dailyTimeGroup.style.display = 'none';
+    } else {
+      intervalValGroup.style.display = 'none';
+      intervalUnitGroup.style.display = 'none';
+      dailyTimeGroup.style.display = 'flex';
+    }
+  });
+
+  // Salvar/Editar agendamento
+  schedForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('sched-edit-id').value;
+    const target = document.getElementById('sched-target').value.trim();
+    const message = document.getElementById('sched-message').value;
+    const type = document.getElementById('sched-type').value;
+    const intervalValue = document.getElementById('sched-interval-val').value;
+    const intervalUnit = document.getElementById('sched-interval-unit').value;
+    const dailyTime = document.getElementById('sched-daily-time').value;
+
+    const scheduleData = {
+      id: id || undefined,
+      target,
+      message,
+      type,
+      intervalValue,
+      intervalUnit,
+      dailyTime
+    };
+
+    const success = await window.api.saveSchedule(scheduleData);
+    if (success) {
+      currentSettings = await window.api.getSettings();
+      renderSchedulesTable();
+      resetSchedulerForm();
+    } else {
+      alert('Erro ao salvar agendamento.');
+    }
+  });
+
+  // Cancelar Edição
+  btnCancel.addEventListener('click', resetSchedulerForm);
+
+  // Ouvir atualizações de disparos em background
+  window.api.onSchedulesUpdate((list) => {
+    currentSettings.scheduledMessages = list;
+    renderSchedulesTable();
+  });
+}
+
+function renderSchedulesTable() {
+  const tbody = document.getElementById('schedules-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const list = currentSettings?.scheduledMessages || [];
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhum disparo agendado cadastrado ainda.</td></tr>`;
+    return;
+  }
+
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+    
+    // Regra Text
+    let ruleText = '';
+    if (item.type === 'interval') {
+      const unitLabel = item.intervalUnit === 'minutes' ? 'minuto(s)' : item.intervalUnit === 'hours' ? 'hora(s)' : 'dia(s)';
+      ruleText = `A cada ${item.intervalValue} ${unitLabel}`;
+    } else {
+      ruleText = `Diário às ${item.dailyTime}`;
+    }
+
+    const lastRunText = item.lastRun ? new Date(item.lastRun).toLocaleTimeString() + ' ' + new Date(item.lastRun).toLocaleDateString() : 'Nunca';
+    const nextRunText = item.enabled 
+      ? (item.nextRun ? new Date(item.nextRun).toLocaleTimeString() + ' ' + new Date(item.nextRun).toLocaleDateString() : 'Pendente') 
+      : '<span style="color:var(--text-muted);">Pausado</span>';
+
+    const truncatedMessage = item.message.length > 50 ? item.message.substring(0, 47) + '...' : item.message;
+
+    tr.innerHTML = `
+      <td><span style="font-size:11px;font-family:var(--font-mono);">${escapeHtml(item.target)}</span></td>
+      <td title="${escapeHtml(item.message)}">${escapeHtml(truncatedMessage)}</td>
+      <td><strong>${ruleText}</strong></td>
+      <td><span style="font-size:11px;color:var(--text-muted);">${lastRunText}</span></td>
+      <td><span style="font-size:11px;font-weight:600;color:var(--primary-color);">${nextRunText}</span></td>
+      <td style="text-align: center;">
+        <button class="btn ${item.enabled ? 'btn-secondary' : 'btn-primary'} btn-sm btn-toggle" data-id="${item.id}" style="margin-right: 6px;">
+          ${item.enabled ? 'Pausar' : 'Ativar'}
+        </button>
+        <button class="btn btn-secondary btn-sm btn-run" data-id="${item.id}" style="margin-right: 6px;">Testar</button>
+        <button class="btn btn-secondary btn-sm btn-edit" data-id="${item.id}" style="margin-right: 6px;">Editar</button>
+        <button class="btn btn-danger btn-sm btn-delete" data-id="${item.id}">Excluir</button>
+      </td>
+    `;
+
+    // Ações
+    tr.querySelector('.btn-toggle').addEventListener('click', () => toggleSchedule(item.id, !item.enabled));
+    tr.querySelector('.btn-run').addEventListener('click', () => triggerScheduleNow(item.id));
+    tr.querySelector('.btn-edit').addEventListener('click', () => editSchedule(item.id));
+    tr.querySelector('.btn-delete').addEventListener('click', () => deleteSchedule(item.id));
+
+    tbody.appendChild(tr);
+  });
+}
+
+function resetSchedulerForm() {
+  document.getElementById('sched-edit-id').value = '';
+  document.getElementById('scheduler-form').reset();
+  
+  // Resetar visual do select
+  document.getElementById('sched-type').value = 'interval';
+  document.getElementById('sched-interval-val-group').style.display = 'flex';
+  document.getElementById('sched-interval-unit-group').style.display = 'flex';
+  document.getElementById('sched-daily-time-group').style.display = 'none';
+
+  document.getElementById('btn-save-sched').textContent = 'Salvar Programação';
+  document.getElementById('btn-cancel-sched-edit').style.display = 'none';
+}
+
+async function toggleSchedule(id, enabled) {
+  const success = await window.api.toggleSchedule(id, enabled);
+  if (success) {
+    currentSettings = await window.api.getSettings();
+    renderSchedulesTable();
+  }
+}
+
+async function triggerScheduleNow(id) {
+  try {
+    const success = await window.api.triggerScheduleNow(id);
+    if (success) {
+      alert('Mensagem enviada com sucesso para teste!');
+      currentSettings = await window.api.getSettings();
+      renderSchedulesTable();
+    }
+  } catch (err) {
+    alert(`Erro ao testar envio: ${err.message}`);
+  }
+}
+
+function editSchedule(id) {
+  const item = currentSettings.scheduledMessages.find(s => s.id === id);
+  if (!item) return;
+
+  document.getElementById('sched-edit-id').value = item.id;
+  document.getElementById('sched-target').value = item.target;
+  document.getElementById('sched-message').value = item.message;
+  document.getElementById('sched-type').value = item.type;
+  document.getElementById('sched-interval-val').value = item.intervalValue || 1;
+  document.getElementById('sched-interval-unit').value = item.intervalUnit || 'hours';
+  document.getElementById('sched-daily-time').value = item.dailyTime || '';
+
+  // Forçar visibilidade dos campos
+  const typeSelect = document.getElementById('sched-type');
+  const intervalValGroup = document.getElementById('sched-interval-val-group');
+  const intervalUnitGroup = document.getElementById('sched-interval-unit-group');
+  const dailyTimeGroup = document.getElementById('sched-daily-time-group');
+
+  if (item.type === 'interval') {
+    intervalValGroup.style.display = 'flex';
+    intervalUnitGroup.style.display = 'flex';
+    dailyTimeGroup.style.display = 'none';
+  } else {
+    intervalValGroup.style.display = 'none';
+    intervalUnitGroup.style.display = 'none';
+    dailyTimeGroup.style.display = 'flex';
+  }
+
+  document.getElementById('btn-save-sched').textContent = 'Salvar Alterações';
+  document.getElementById('btn-cancel-sched-edit').style.display = 'inline-flex';
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Deseja realmente remover esta programação de disparo?')) return;
+
+  const success = await window.api.deleteSchedule(id);
+  if (success) {
+    currentSettings = await window.api.getSettings();
+    renderSchedulesTable();
+    resetSchedulerForm();
+  }
+}
 
 // --- Simulação Gráfica na Dashboard (Visual Premium) ---
 function initDashboardChartSimulation() {
