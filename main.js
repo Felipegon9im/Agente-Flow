@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -13,6 +13,59 @@ let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected', 'connecting', 'connected', 'qr'
 let currentQR = '';
 let settings = null;
+let tray = null;
+app.isQuitting = false;
+
+function translateWhatsAppStatus(status) {
+  switch (status) {
+    case 'connected': return 'Conectado';
+    case 'connecting': return 'Conectando...';
+    case 'qr': return 'Aguardando Login (QR)';
+    case 'disconnected': return 'Desconectado';
+    default: return status;
+  }
+}
+
+function updateTrayStatus(status) {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'ZapFlow AI', enabled: false },
+    { label: `WhatsApp: ${translateWhatsAppStatus(status)}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Abrir Painel', click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { label: 'Sair', click: () => {
+        app.isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, 'icon.png');
+  tray = new Tray(iconPath);
+  
+  tray.setToolTip('ZapFlow AI - WhatsApp Agent');
+  updateTrayStatus(connectionStatus);
+  
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+}
 let expressServer = null;
 
 // Estatísticas
@@ -158,10 +211,7 @@ async function startWhatsAppConnection() {
   }
 
   logToUI('WHATSAPP', 'Iniciando conexão...');
-  connectionStatus = 'connecting';
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('whatsapp-status', connectionStatus);
-  }
+  setConnectionStatus('connecting');
 
   try {
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
@@ -181,12 +231,11 @@ async function startWhatsAppConnection() {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        connectionStatus = 'qr';
+        setConnectionStatus('qr');
         try {
           currentQR = await QRCode.toDataURL(qr);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('whatsapp-qr', currentQR);
-            mainWindow.webContents.send('whatsapp-status', 'qr');
           }
           logToUI('WHATSAPP', 'Novo QR Code gerado. Aguardando escaneamento...');
         } catch (err) {
@@ -195,18 +244,14 @@ async function startWhatsAppConnection() {
       }
 
       if (connection === 'connecting') {
-        connectionStatus = 'connecting';
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('whatsapp-status', 'connecting');
-        }
+        setConnectionStatus('connecting');
         logToUI('WHATSAPP', 'Conectando...');
       }
 
       if (connection === 'open') {
-        connectionStatus = 'connected';
+        setConnectionStatus('connected');
         currentQR = '';
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('whatsapp-status', 'connected');
           mainWindow.webContents.send('whatsapp-qr', '');
         }
         logToUI('WHATSAPP', `Conectado com sucesso! Usuário logado: ${sock.user.name || sock.user.id}`);
@@ -223,16 +268,12 @@ async function startWhatsAppConnection() {
         currentQR = '';
 
         if (shouldReconnect) {
-          connectionStatus = 'connecting';
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('whatsapp-status', 'connecting');
-          }
+          setConnectionStatus('connecting');
           // Reconectar após um pequeno atraso
           setTimeout(() => startWhatsAppConnection(), 5000);
         } else {
-          connectionStatus = 'disconnected';
+          setConnectionStatus('disconnected');
           if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('whatsapp-status', 'disconnected');
             mainWindow.webContents.send('whatsapp-qr', '');
           }
           // Deletar pasta de credenciais se deslogado
@@ -287,10 +328,7 @@ async function startWhatsAppConnection() {
 
   } catch (err) {
     logToUI('SYSTEM', `Erro ao inicializar conexão Baileys: ${err.message}`);
-    connectionStatus = 'disconnected';
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('whatsapp-status', 'disconnected');
-    }
+    setConnectionStatus('disconnected');
   }
 }
 
@@ -643,6 +681,14 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
+  // Minimize to tray instead of closing
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -652,6 +698,7 @@ function createWindow() {
 app.whenReady().then(() => {
   loadSettings();
   createWindow();
+  createTray();
 
   // Iniciar Express
   startExpressServer(settings.expressPort);
@@ -712,11 +759,9 @@ ipcMain.on('whatsapp-disconnect', async () => {
       console.error(err);
     }
     sock = null;
-    connectionStatus = 'disconnected';
     currentQR = '';
-    
+    setConnectionStatus('disconnected');
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('whatsapp-status', 'disconnected');
       mainWindow.webContents.send('whatsapp-qr', '');
     }
   }
