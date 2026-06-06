@@ -251,9 +251,6 @@ async function startWhatsAppConnection() {
       if (m.type !== 'notify') return;
 
       for (const msg of m.messages) {
-        // Ignorar mensagens enviadas por nós mesmos
-        if (msg.key.fromMe) continue;
-
         const jid = msg.key.remoteJid;
         
         // Extrair texto da mensagem
@@ -264,9 +261,15 @@ async function startWhatsAppConnection() {
 
         if (!text) continue;
 
+        // Logar todas as mensagens antes de filtrar por fromMe para que o usuário possa copiar IDs de grupos
+        const origin = msg.key.fromMe ? 'Você' : jid;
+        logToUI('WHATSAPP', `Mensagem de ${origin}: "${text}" (JID: ${jid})`);
+
+        // Ignorar mensagens enviadas por nós mesmos para estatísticas e IA
+        if (msg.key.fromMe) continue;
+
         stats.totalReceived++;
         broadcastStats();
-        logToUI('WHATSAPP', `Mensagem recebida de ${jid}: "${text}"`);
 
         // Responder apenas a DMs (Ignorar Grupos e Listas de Transmissão por padrão)
         if (!jid.endsWith('@s.whatsapp.net')) continue;
@@ -589,9 +592,13 @@ async function checkScheduledMessages() {
   const list = settings.scheduledMessages || [];
   for (const schedule of list) {
     if (schedule.enabled && schedule.nextRun && now >= schedule.nextRun) {
-      logToUI('SYSTEM', `Disparando mensagem agendada (ID: ${schedule.id}) para ${schedule.target}`);
+      let targetJid = schedule.target;
+      if (!targetJid.includes('@')) {
+        targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
+      }
+      logToUI('SYSTEM', `Disparando mensagem agendada (ID: ${schedule.id}) para ${targetJid}`);
       try {
-        await sock.sendMessage(schedule.target, { text: schedule.message });
+        await sock.sendMessage(targetJid, { text: schedule.message });
         
         schedule.lastRun = now;
         schedule.nextRun = calculateNextRun(schedule);
@@ -819,7 +826,11 @@ ipcMain.handle('schedule-trigger-now', async (event, id) => {
   if (schedule && sock && connectionStatus === 'connected') {
     logToUI('SYSTEM', `Gatilho manual disparado para agendamento ${id}`);
     try {
-      await sock.sendMessage(schedule.target, { text: schedule.message });
+      let targetJid = schedule.target;
+      if (!targetJid.includes('@')) {
+        targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
+      }
+      await sock.sendMessage(targetJid, { text: schedule.message });
       schedule.lastRun = Date.now();
       schedule.nextRun = calculateNextRun(schedule);
       saveSettings({ scheduledMessages: list });
