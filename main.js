@@ -970,10 +970,30 @@ ipcMain.handle('appointment-delete', (event, id) => {
   return true;
 });
 
-ipcMain.handle('appointment-create', (event, { name, phone, date, time }) => {
+ipcMain.handle('appointment-create', async (event, { name, phone, date, time }) => {
   try {
     const booking = bookSlot(name, phone, date, time);
     logToUI('SYSTEM', `Novo agendamento manual criado via UI: ${name} (${phone}) em ${date} às ${time}`);
+    
+    // Disparar mensagem de confirmação no WhatsApp se estiver conectado
+    if (sock && connectionStatus === 'connected') {
+      try {
+        let displayDate = date;
+        const parts = date.split('-');
+        if (parts.length === 3) {
+          displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        
+        const confirmText = `Olá, *${name.trim()}*! Seu agendamento foi confirmado para o dia *${displayDate}* às *${time}* hrs. Obrigado!`;
+        await sock.sendMessage(booking.phone, { text: confirmText });
+        logToUI('WHATSAPP', `Mensagem de confirmação manual enviada para ${booking.phone}`);
+      } catch (sendErr) {
+        logToUI('WHATSAPP', `Erro ao enviar mensagem de confirmação manual: ${sendErr.message}`);
+      }
+    } else {
+      logToUI('SYSTEM', 'WhatsApp desconectado. Confirmação manual não enviada via WhatsApp.');
+    }
+    
     return { success: true, appointment: booking };
   } catch (err) {
     logToUI('SYSTEM', `Erro ao criar agendamento manual: ${err.message}`);
