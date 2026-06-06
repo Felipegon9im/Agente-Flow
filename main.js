@@ -348,7 +348,7 @@ async function startWhatsAppConnection() {
         broadcastStats();
 
         // Responder apenas a DMs (Ignorar Grupos e Listas de Transmissão por padrão)
-        if (!jid.endsWith('@s.whatsapp.net')) continue;
+        if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@lid')) continue;
 
         // Executar Inteligência Artificial se ativa
         if (settings.aiEnabled && settings.geminiApiKey) {
