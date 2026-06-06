@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSchedulerUI();
   renderSchedulesTable();
 
+  // Inicializar Agenda IA UI
+  initAgendaUI();
+  renderAppointmentsTable();
+
   // Inicializar Console de Logs
   initConsoleUI();
 
@@ -71,6 +75,11 @@ async function loadAndDisplaySettings() {
   document.getElementById('temperature').value = currentSettings.temperature || 0.7;
   document.getElementById('temp-val').textContent = currentSettings.temperature || 0.7;
   document.getElementById('express-port').value = currentSettings.expressPort || 3003;
+
+  // Preencher formulário de Agenda
+  document.getElementById('working-hours-start').value = currentSettings.workingHoursStart || '09:00';
+  document.getElementById('working-hours-end').value = currentSettings.workingHoursEnd || '18:00';
+  document.getElementById('slot-duration').value = currentSettings.slotDuration || 60;
 
   // Atualizar porta Express na Dashboard
   document.getElementById('dash-express-port').textContent = currentSettings.expressPort || 3003;
@@ -466,6 +475,123 @@ function animateStatChange(id) {
 }
 
 // A tabela de ferramentas é renderizada diretamente na inicialização do DOMContentLoaded.
+
+// --- Agenda IA UI ---
+function initAgendaUI() {
+  const agendaSettingsForm = document.getElementById('agenda-settings-form');
+
+  // Salvar configurações de funcionamento
+  agendaSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const start = document.getElementById('working-hours-start').value;
+    const end = document.getElementById('working-hours-end').value;
+    const duration = parseInt(document.getElementById('slot-duration').value, 10);
+
+    const success = await window.api.saveSettings({
+      workingHoursStart: start,
+      workingHoursEnd: end,
+      slotDuration: duration
+    });
+
+    if (success) {
+      currentSettings = await window.api.getSettings();
+      alert('Configurações de funcionamento da agenda salvas com sucesso!');
+    } else {
+      alert('Erro ao salvar configurações da agenda.');
+    }
+  });
+
+  // Ouvir atualizações de agendamentos realizados pela IA
+  window.api.onAppointmentsUpdate((list) => {
+    currentSettings.appointments = list;
+    renderAppointmentsTable();
+  });
+}
+
+function renderAppointmentsTable() {
+  const tbody = document.getElementById('appointments-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const list = currentSettings?.appointments || [];
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhum agendamento realizado pela IA ainda.</td></tr>`;
+    return;
+  }
+
+  // Ordenar agendamentos por data e hora (mais próximos primeiro)
+  list.sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) return dateCompare;
+    return a.time.localeCompare(b.time);
+  });
+
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+
+    // Formatar data em PT-BR (DD/MM/AAAA)
+    let formattedDate = item.date;
+    try {
+      const parts = item.date.split('-');
+      if (parts.length === 3) {
+        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    } catch (e) {}
+
+    // Badge de status
+    let statusBadge = '';
+    if (item.status === 'confirmed') {
+      statusBadge = '<span class="status-badge" style="background:rgba(16,185,129,0.12); color:var(--success); border:1px solid rgba(16,185,129,0.25);">Confirmado</span>';
+    } else {
+      statusBadge = '<span class="status-badge" style="background:rgba(239,68,68,0.12); color:var(--danger); border:1px solid rgba(239,68,68,0.25);">Cancelado</span>';
+    }
+
+    const cleanPhone = item.phone.split('@')[0];
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(item.name)}</strong></td>
+      <td><span style="font-family:var(--font-mono); font-size:11px;">${cleanPhone}</span></td>
+      <td>${formattedDate}</td>
+      <td><strong>${item.time}</strong></td>
+      <td>${statusBadge}</td>
+      <td style="text-align: center;">
+        ${item.status === 'confirmed' 
+          ? `<button class="btn btn-secondary btn-sm btn-cancel-app" data-id="${item.id}" style="margin-right: 6px;">Cancelar</button>`
+          : ''
+        }
+        <button class="btn btn-danger btn-sm btn-delete-app" data-id="${item.id}">Excluir</button>
+      </td>
+    `;
+
+    // Binds
+    if (item.status === 'confirmed') {
+      tr.querySelector('.btn-cancel-app').addEventListener('click', () => cancelAppointment(item.id));
+    }
+    tr.querySelector('.btn-delete-app').addEventListener('click', () => deleteAppointment(item.id));
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function cancelAppointment(id) {
+  if (!confirm('Deseja realmente cancelar este agendamento? O horário será liberado para novos clientes.')) return;
+  const success = await window.api.cancelAppointment(id);
+  if (success) {
+    currentSettings = await window.api.getSettings();
+    renderAppointmentsTable();
+  }
+}
+
+async function deleteAppointment(id) {
+  if (!confirm('Tem certeza que deseja excluir este agendamento do histórico?')) return;
+  const success = await window.api.deleteAppointment(id);
+  if (success) {
+    currentSettings = await window.api.getSettings();
+    renderAppointmentsTable();
+  }
+}
 
 // --- Agendador Nativo UI ---
 function initSchedulerUI() {

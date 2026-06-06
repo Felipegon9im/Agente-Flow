@@ -25,5 +25,10 @@ contextBridge.exposeInMainWorld('api', {
   toggleSchedule: (id, enabled) => ipcRenderer.invoke('schedule-toggle', id, enabled),
   triggerScheduleNow: (id) => ipcRenderer.invoke('schedule-trigger-now', id),
   deleteSchedule: (id) => ipcRenderer.invoke('schedule-delete', id),
-  onSchedulesUpdate: (callback) => ipcRenderer.on('schedules-update', (event, list) => callback(list))
+  onSchedulesUpdate: (callback) => ipcRenderer.on('schedules-update', (event, list) => callback(list)),
+
+  // Agenda / Consultas por IA
+  cancelAppointment: (id) => ipcRenderer.invoke('appointment-cancel', id),
+  deleteAppointment: (id) => ipcRenderer.invoke('appointment-delete', id),
+  onAppointmentsUpdate: (callback) => ipcRenderer.on('appointments-update', (event, list) => callback(list))
 });

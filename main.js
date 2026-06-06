@@ -50,12 +50,16 @@ function loadSettings() {
   const defaultSettings = {
     geminiApiKey: '',
     geminiModel: 'gemini-2.0-flash',
-    systemPrompt: 'Você é um assistente virtual inteligente e prestativo para atendimento ao cliente no WhatsApp. Responda de forma curta, objetiva, profissional e amigável.',
+    systemPrompt: 'Você é um assistente virtual inteligente e prestativo para atendimento ao cliente no WhatsApp. Responda de forma curta, objetiva, profissional e amigável. Para agendamentos, você possui ferramentas para ver os horários disponíveis (ver_horarios_disponiveis) e para confirmar a reserva (confirmar_agendamento) quando o cliente escolher. Sempre pergunte o nome do cliente antes de confirmar.',
     temperature: 0.7,
     n8nTools: [],
     expressPort: 3003,
     aiEnabled: true,
-    scheduledMessages: []
+    scheduledMessages: [],
+    workingHoursStart: '09:00',
+    workingHoursEnd: '18:00',
+    slotDuration: 60,
+    appointments: []
   };
 
   try {
@@ -301,9 +305,52 @@ async function handleAIMessage(jid, userText) {
 
   const ai = new GoogleGenAI({ apiKey: settings.geminiApiKey });
 
-  // Construir declaração de ferramentas do N8N
+  // Construir declaração de ferramentas
   const tools = [];
   const functionDeclarations = [];
+
+  // Adicionar ferramentas nativas de agendamento automático da IA
+  functionDeclarations.push({
+    name: 'ver_horarios_disponiveis',
+    description: 'Retorna uma lista de horários livres para agendamento em uma data específica no formato AAAA-MM-DD (ex: 2026-06-07). Chame sempre que o cliente perguntar se há horários livres ou demonstrar interesse em marcar um dia.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        date: {
+          type: 'STRING',
+          description: 'Data a ser consultada no formato AAAA-MM-DD.'
+        }
+      },
+      required: ['date']
+    }
+  });
+
+  functionDeclarations.push({
+    name: 'confirmar_agendamento',
+    description: 'Registra e confirma uma reserva para o cliente em um determinado dia (AAAA-MM-DD) e horário (HH:MM). Chame apenas depois que o cliente tiver escolhido o dia e horário e tiver informado seu nome completo ou primeiro nome. Requer nome, telefone, data e horário.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: {
+          type: 'STRING',
+          description: 'Nome completo ou primeiro nome do cliente.'
+        },
+        phone: {
+          type: 'STRING',
+          description: 'Telefone do cliente (geralmente extraído do JID do remetente ou informado pelo usuário).'
+        },
+        date: {
+          type: 'STRING',
+          description: 'Data do agendamento (AAAA-MM-DD).'
+        },
+        time: {
+          type: 'STRING',
+          description: 'Horário do agendamento (HH:MM).'
+        }
+      },
+      required: ['name', 'phone', 'date', 'time']
+    }
+  });
 
   if (settings.n8nTools && settings.n8nTools.length > 0) {
     settings.n8nTools.forEach(tool => {
@@ -330,10 +377,10 @@ async function handleAIMessage(jid, userText) {
         }
       });
     });
+  }
 
-    if (functionDeclarations.length > 0) {
-      tools.push({ functionDeclarations });
-    }
+  if (functionDeclarations.length > 0) {
+    tools.push({ functionDeclarations });
   }
 
   try {
@@ -355,40 +402,60 @@ async function handleAIMessage(jid, userText) {
       stats.n8nCalls++;
       broadcastStats();
 
-      // Encontrar webhook correspondente
-      const toolConfig = settings.n8nTools.find(t => t.name === call.name);
-      let webhookResult = '';
+      let toolResult = '';
 
-      if (toolConfig) {
+      if (call.name === 'ver_horarios_disponiveis') {
         try {
-          logToUI('N8N', `Chamando Webhook N8N (${toolConfig.method}): ${toolConfig.webhookUrl}`);
-          
-          // Requisição para N8N usando native fetch (Node 18+)
-          const resN8N = await fetch(toolConfig.webhookUrl, {
-            method: toolConfig.method || 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: toolConfig.method === 'GET' ? undefined : JSON.stringify(call.args)
-          });
-
-          const rawResponseText = await resN8N.text();
-          logToUI('N8N', `Retorno N8N (Status ${resN8N.status}): ${rawResponseText.substring(0, 150)}`);
-          webhookResult = rawResponseText;
+          const date = call.args.date;
+          logToUI('SYSTEM', `IA consultando horários para a data: ${date}`);
+          const availableSlots = getAvailableSlotsForDate(date);
+          toolResult = JSON.stringify({ available_slots: availableSlots });
         } catch (err) {
-          logToUI('N8N', `Erro ao conectar com N8N: ${err.message}`);
-          webhookResult = JSON.stringify({ error: err.message });
+          logToUI('SYSTEM', `Erro ao consultar horários: ${err.message}`);
+          toolResult = JSON.stringify({ error: err.message });
         }
-      } else {
-        logToUI('GEMINI', `Aviso: Ferramenta "${call.name}" não configurada no aplicativo.`);
-        webhookResult = JSON.stringify({ error: `Ferramenta ${call.name} não existe.` });
+      } 
+      else if (call.name === 'confirmar_agendamento') {
+        try {
+          logToUI('SYSTEM', `IA solicitando agendamento: ${JSON.stringify(call.args)}`);
+          const booking = bookSlot(call.args.name, call.args.phone, call.args.date, call.args.time);
+          toolResult = JSON.stringify({ success: true, appointment: booking });
+        } catch (err) {
+          logToUI('SYSTEM', `Erro ao confirmar agendamento: ${err.message}`);
+          toolResult = JSON.stringify({ error: err.message });
+        }
+      }
+      else {
+        // Encontrar webhook correspondente do N8N
+        const toolConfig = settings.n8nTools.find(t => t.name === call.name);
+        if (toolConfig) {
+          try {
+            logToUI('N8N', `Chamando Webhook N8N (${toolConfig.method}): ${toolConfig.webhookUrl}`);
+            const resN8N = await fetch(toolConfig.webhookUrl, {
+              method: toolConfig.method || 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: toolConfig.method === 'GET' ? undefined : JSON.stringify(call.args)
+            });
+            const rawResponseText = await resN8N.text();
+            logToUI('N8N', `Retorno N8N (Status ${resN8N.status}): ${rawResponseText.substring(0, 150)}`);
+            toolResult = rawResponseText;
+          } catch (err) {
+            logToUI('N8N', `Erro ao conectar com N8N: ${err.message}`);
+            toolResult = JSON.stringify({ error: err.message });
+          }
+        } else {
+          logToUI('GEMINI', `Aviso: Ferramenta "${call.name}" não configurada no aplicativo.`);
+          toolResult = JSON.stringify({ error: `Ferramenta ${call.name} não existe.` });
+        }
       }
 
       // Adicionar resposta da ferramenta ao histórico e chamar novamente
       history.push({ role: 'model', parts: [{ functionCall: { name: call.name, args: call.args } }] });
       history.push({
         role: 'tool',
-        parts: [{ functionResponse: { name: call.name, response: { result: webhookResult } } }]
+        parts: [{ functionResponse: { name: call.name, response: { result: toolResult } } }]
       });
 
       // Solicitar continuação para o Gemini
@@ -424,6 +491,62 @@ async function handleAIMessage(jid, userText) {
   } catch (err) {
     logToUI('GEMINI', `Falha ao gerar resposta ou chamar API: ${err.message}`);
   }
+}
+
+// --- Funções Auxiliares para o Agendador Automático da IA ---
+function getAvailableSlotsForDate(dateStr) {
+  const startHourStr = settings.workingHoursStart || '09:00';
+  const endHourStr = settings.workingHoursEnd || '18:00';
+  const duration = parseInt(settings.slotDuration, 10) || 60;
+
+  const [startHour, startMin] = startHourStr.split(':').map(Number);
+  const [endHour, endMin] = endHourStr.split(':').map(Number);
+
+  const slots = [];
+  const start = new Date(2000, 0, 1, startHour, startMin, 0, 0);
+  const end = new Date(2000, 0, 1, endHour, endMin, 0, 0);
+
+  let current = new Date(start);
+  while (current.getTime() + duration * 60 * 1000 <= end.getTime()) {
+    const hh = String(current.getHours()).padStart(2, '0');
+    const mm = String(current.getMinutes()).padStart(2, '0');
+    slots.push(`${hh}:${mm}`);
+    current.setTime(current.getTime() + duration * 60 * 1000);
+  }
+
+  const booked = settings.appointments || [];
+  const bookedTimes = booked
+    .filter(app => app.date === dateStr && app.status !== 'cancelled')
+    .map(app => app.time);
+
+  return slots.filter(time => !bookedTimes.includes(time));
+}
+
+function bookSlot(name, phone, date, time) {
+  if (!settings.appointments) settings.appointments = [];
+  
+  let cleanPhone = phone;
+  if (!cleanPhone.includes('@')) {
+    cleanPhone = `${cleanPhone.replace(/\D/g, '')}@s.whatsapp.net`;
+  }
+
+  const appointment = {
+    id: `app-${Date.now()}`,
+    name: name.trim(),
+    phone: cleanPhone,
+    date: date.trim(),
+    time: time.trim(),
+    status: 'confirmed'
+  };
+
+  settings.appointments.push(appointment);
+  saveSettings({ appointments: settings.appointments });
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('appointments-update', settings.appointments);
+  }
+
+  return appointment;
 }
 
 // --- Motor de Agendamento Nativo ---
@@ -708,5 +831,32 @@ ipcMain.handle('schedule-delete', (event, id) => {
     mainWindow.webContents.send('schedules-update', settings.scheduledMessages);
   }
   logToUI('SYSTEM', `Agendamento excluído (ID: ${id})`);
+  return true;
+});
+
+// IPCs da Agenda de Consultas/Compromissos
+ipcMain.handle('appointment-cancel', (event, id) => {
+  const list = settings.appointments || [];
+  const app = list.find(a => a.id === id);
+  if (app) {
+    app.status = 'cancelled';
+    saveSettings({ appointments: list });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('appointments-update', list);
+    }
+    logToUI('SYSTEM', `Agendamento cancelado via UI (ID: ${id})`);
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('appointment-delete', (event, id) => {
+  if (!settings.appointments) return false;
+  settings.appointments = settings.appointments.filter(a => a.id !== id);
+  saveSettings({ appointments: settings.appointments });
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('appointments-update', settings.appointments);
+  }
+  logToUI('SYSTEM', `Agendamento excluído da lista (ID: ${id})`);
   return true;
 });

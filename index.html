@@ -56,6 +56,16 @@
           </svg>
           Ferramentas N8N
         </button>
+        <button class="nav-item" data-tab="agenda">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>
+          </svg>
+          Agenda IA
+        </button>
         <button class="nav-item" data-tab="scheduler">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -395,6 +405,75 @@
               </div>
             </div>
 
+        </section>
+
+        <!-- ABA: AGENDA / CONSULTAS -->
+        <section class="tab-panel" id="agenda-panel">
+          <div class="panel-layout">
+            
+            <!-- Configuração de Horários -->
+            <div class="panel-section side-panel" style="min-width: 300px; max-width: 340px;">
+              <h3>Configurações da Agenda</h3>
+              <p class="section-desc">Defina os horários de funcionamento e duração para a IA organizar suas reservas.</p>
+              
+              <form id="agenda-settings-form">
+                <div class="form-group">
+                  <label for="working-hours-start">Horário de Início (Funcionamento)</label>
+                  <input type="time" id="working-hours-start" value="09:00" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="working-hours-end">Horário de Fim (Funcionamento)</label>
+                  <input type="time" id="working-hours-end" value="18:00" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="slot-duration">Duração do Slot (Minutos)</label>
+                  <select id="slot-duration">
+                    <option value="30">30 minutos</option>
+                    <option value="45">45 minutos</option>
+                    <option value="60" selected>1 hora (60 minutos)</option>
+                    <option value="90">1 hora e 30 minutos</option>
+                    <option value="120">2 horas</option>
+                  </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-full" style="margin-top: 12px;" id="btn-save-agenda-settings">Salvar Configurações</button>
+              </form>
+
+              <div class="n8n-info-card" style="margin-top: 24px;">
+                <h4>💡 Como Funciona</h4>
+                <p class="n8n-help-text" style="font-size:12px; margin-top:6px;">
+                  A IA responderá no WhatsApp consultando esses horários. Quando o cliente escolher uma data/hora e informar o seu nome, a IA confirmará o agendamento de forma autônoma e ele aparecerá na tabela ao lado em tempo real.
+                </p>
+              </div>
+            </div>
+
+            <!-- Listagem de Agendamentos por IA -->
+            <div class="panel-section main-panel">
+              <h3>Reservas Realizadas pela IA</h3>
+              <div class="tools-table-container">
+                <table class="tools-table" id="appointments-table">
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Telefone</th>
+                      <th>Data</th>
+                      <th>Horário</th>
+                      <th>Status</th>
+                      <th style="width: 180px; text-align: center;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="appointments-table-body">
+                    <tr>
+                      <td colspan="6" class="empty-table">Nenhum agendamento realizado pela IA ainda.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
         </section>
 
         <!-- ABA: AGENDADOR DE MENSAGENS -->
