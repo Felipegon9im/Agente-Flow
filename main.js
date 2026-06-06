@@ -210,6 +210,7 @@ async function startWhatsAppConnection() {
           mainWindow.webContents.send('whatsapp-qr', '');
         }
         logToUI('WHATSAPP', `Conectado com sucesso! Usuário logado: ${sock.user.name || sock.user.id}`);
+        checkScheduledMessages();
       }
 
       if (connection === 'close') {
@@ -552,6 +553,10 @@ function bookSlot(name, phone, date, time) {
 // --- Motor de Agendamento Nativo ---
 function calculateNextRun(schedule) {
   if (schedule.type === 'interval') {
+    // Se a mensagem nunca rodou (criação recente), o primeiro disparo ocorre imediatamente
+    if (!schedule.lastRun) {
+      return Date.now();
+    }
     let multiplier = 60 * 1000; // Padrão: minutos
     if (schedule.intervalUnit === 'hours') {
       multiplier = 60 * 60 * 1000;
@@ -743,6 +748,8 @@ ipcMain.on('request-stats', (event) => {
 ipcMain.handle('schedule-save', (event, scheduleData) => {
   if (!settings.scheduledMessages) settings.scheduledMessages = [];
   
+  const existing = scheduleData.id ? settings.scheduledMessages.find(s => s.id === scheduleData.id) : null;
+  
   const newSchedule = {
     id: scheduleData.id || Date.now().toString(),
     target: scheduleData.target.trim(),
@@ -752,7 +759,7 @@ ipcMain.handle('schedule-save', (event, scheduleData) => {
     intervalUnit: scheduleData.intervalUnit || 'hours',
     dailyTime: scheduleData.dailyTime || '',
     enabled: scheduleData.enabled !== undefined ? scheduleData.enabled : true,
-    lastRun: scheduleData.lastRun || null
+    lastRun: null // Reset lastRun so it fires immediately on save/configure
   };
   
   newSchedule.nextRun = calculateNextRun(newSchedule);
@@ -775,6 +782,10 @@ ipcMain.handle('schedule-save', (event, scheduleData) => {
   }
   
   logToUI('SYSTEM', `Agendamento salvo com sucesso (ID: ${newSchedule.id})`);
+  
+  // Trigger check immediately so it sends the message right away if WhatsApp is connected
+  checkScheduledMessages();
+  
   return true;
 });
 
@@ -784,6 +795,8 @@ ipcMain.handle('schedule-toggle', (event, id, enabled) => {
   if (schedule) {
     schedule.enabled = enabled;
     if (enabled) {
+      // If we enable it, let's reset lastRun so it fires immediately on resume
+      schedule.lastRun = null;
       schedule.nextRun = calculateNextRun(schedule);
     }
     saveSettings({ scheduledMessages: list });
@@ -791,6 +804,10 @@ ipcMain.handle('schedule-toggle', (event, id, enabled) => {
       mainWindow.webContents.send('schedules-update', list);
     }
     logToUI('SYSTEM', `Agendamento ${id} ${enabled ? 'ativado' : 'pausado'}`);
+    
+    if (enabled) {
+      checkScheduledMessages();
+    }
     return true;
   }
   return false;
