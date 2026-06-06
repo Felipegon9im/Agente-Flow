@@ -713,6 +713,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+  mainWindow.webContents.openDevTools();
 
   // Minimize to tray instead of closing
   mainWindow.on('close', (event) => {
@@ -965,4 +966,10 @@ ipcMain.handle('appointment-delete', (event, id) => {
   }
   logToUI('SYSTEM', `Agendamento excluído da lista (ID: ${id})`);
   return true;
+});
+
+ipcMain.on('log-error-to-main', (event, err) => {
+  try {
+    fs.appendFileSync('c:\\Users\\Felipe Gondim\\HUB_Projetos\\Agente\\app_debug.log', `[${new Date().toLocaleTimeString()}] [RENDERER ERROR] ${JSON.stringify(err, null, 2)}\n`);
+  } catch (e) {}
 });

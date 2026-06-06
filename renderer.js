@@ -1,3 +1,27 @@
+// --- Capturar erros no Renderer e mandar para o Main (para fins de debug remoto) ---
+window.addEventListener('error', (event) => {
+  if (window.api && window.api.logError) {
+    window.api.logError({
+      type: 'error',
+      message: event.message,
+      source: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error ? event.error.stack : ''
+    });
+  }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  if (window.api && window.api.logError) {
+    window.api.logError({
+      type: 'unhandledrejection',
+      message: event.reason ? event.reason.toString() : 'Unhandled promise rejection',
+      stack: event.reason && event.reason.stack ? event.reason.stack : ''
+    });
+  }
+});
+
 // --- Estado Global do Renderer ---
 let currentSettings = null;
 
