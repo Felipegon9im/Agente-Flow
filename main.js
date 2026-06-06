@@ -7,6 +7,19 @@ const pino = require('pino');
 const QRCode = require('qrcode');
 const { GoogleGenAI } = require('@google/genai');
 
+// --- Logger de travamento/erros globais ---
+process.on('uncaughtException', (err) => {
+  try {
+    fs.appendFileSync('c:\\Users\\Felipe Gondim\\HUB_Projetos\\Agente\\app_debug.log', `[${new Date().toLocaleTimeString()}] [UNCAUGHT EXCEPTION] ${err.stack || err}\n`);
+  } catch (e) {}
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  try {
+    fs.appendFileSync('c:\\Users\\Felipe Gondim\\HUB_Projetos\\Agente\\app_debug.log', `[${new Date().toLocaleTimeString()}] [UNHANDLED REJECTION] ${reason.stack || reason}\n`);
+  } catch (e) {}
+});
+
 // --- Globais ---
 let mainWindow = null;
 let sock = null;
@@ -102,7 +115,11 @@ const authFolder = path.join(app.getPath('userData'), 'baileys_auth');
 // --- Logger para UI ---
 function logToUI(type, message) {
   const time = new Date().toLocaleTimeString();
+  const logLine = `[${time}] [${type}] ${message}\n`;
   console.log(`[${type}] ${message}`);
+  try {
+    fs.appendFileSync('c:\\Users\\Felipe Gondim\\HUB_Projetos\\Agente\\app_debug.log', logLine);
+  } catch (err) {}
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('log-message', { time, type, message });
   }
