@@ -309,6 +309,7 @@ body {
 
 .panel-layout.flex-column {
   flex-direction: column;
+  height: auto;
 }
 
 .panel-layout.flex-column .panel-section {
@@ -316,8 +317,8 @@ body {
 }
 
 .panel-layout.flex-column .panel-section.flex-1 {
-  flex-shrink: 1;
-  overflow: hidden;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .main-panel {
