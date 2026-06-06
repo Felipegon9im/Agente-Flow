@@ -48,6 +48,14 @@ function updateTrayStatus(status) {
   tray.setContextMenu(contextMenu);
 }
 
+function setConnectionStatus(status) {
+  connectionStatus = status;
+  updateTrayStatus(status);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('whatsapp-status', status);
+  }
+}
+
 function createTray() {
   try {
     const iconPath = path.join(__dirname, 'icon.png');
