@@ -293,7 +293,7 @@ async function startWhatsAppConnection() {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== DisconnectReason.connectionReplaced;
 
         logToUI('WHATSAPP', `Conexão fechada. Código: ${statusCode}. Tentando reconectar? ${shouldReconnect ? 'Sim' : 'Não'}`);
 
@@ -309,12 +309,14 @@ async function startWhatsAppConnection() {
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('whatsapp-qr', '');
           }
-          // Deletar pasta de credenciais se deslogado
-          try {
-            fs.rmSync(authFolder, { recursive: true, force: true });
-            logToUI('WHATSAPP', 'Sessão encerrada e arquivos locais limpos.');
-          } catch (err) {
-            console.error('Erro ao deletar pasta auth:', err);
+          if (statusCode === DisconnectReason.loggedOut) {
+            // Deletar pasta de credenciais apenas se deslogado explicitamente
+            try {
+              fs.rmSync(authFolder, { recursive: true, force: true });
+              logToUI('WHATSAPP', 'Sessão encerrada e arquivos locais limpos.');
+            } catch (err) {
+              console.error('Erro ao deletar pasta auth:', err);
+            }
           }
         }
       }
