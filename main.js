@@ -626,6 +626,54 @@ function bookSlot(name, phone, date, time) {
   return appointment;
 }
 
+function checkAppointmentReminders() {
+  if (!settings.appointments || settings.appointments.length === 0) return;
+  if (settings.appointmentsReminderEnabled === false) return;
+  if (!sock || connectionStatus !== 'connected') return;
+
+  const now = new Date();
+  let updated = false;
+  const reminderHours = parseInt(settings.appointmentsReminderHours, 10) || 2;
+  const reminderWindowMs = reminderHours * 60 * 60 * 1000;
+
+  settings.appointments.forEach(async (app) => {
+    if (app.status !== 'confirmed' || app.reminderSent) return;
+
+    try {
+      const [year, month, day] = app.date.split('-').map(Number);
+      const [hours, minutes] = app.time.split(':').map(Number);
+      const appDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      const diffMs = appDate.getTime() - now.getTime();
+
+      // Se o compromisso for no futuro e faltar menos ou igual ao tempo de janela
+      if (diffMs > 0 && diffMs <= reminderWindowMs) {
+        app.reminderSent = true;
+        updated = true;
+
+        let displayDate = app.date;
+        const parts = app.date.split('-');
+        if (parts.length === 3) {
+          displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        const reminderText = `⏰ *Lembrete de Agendamento*\n\nOlá, *${app.name}*!\nPassando para lembrar do seu compromisso agendado para hoje, *${displayDate}* às *${app.time}* hrs.\n\nContamos com a sua presença!`;
+
+        await sock.sendMessage(app.phone, { text: reminderText });
+        logToUI('WHATSAPP', `Lembrete automático enviado para ${app.phone} (Compromisso às ${app.time})`);
+      }
+    } catch (err) {
+      console.error('Erro ao processar lembrete automático:', err);
+    }
+  });
+
+  if (updated) {
+    saveSettings({ appointments: settings.appointments });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('appointments-update', settings.appointments);
+    }
+  }
+}
+
 // --- Motor de Agendamento Nativo ---
 function calculateNextRun(schedule) {
   if (schedule.type === 'interval') {
@@ -749,6 +797,9 @@ app.whenReady().then(() => {
 
   // Iniciar Loop do Agendador Nativo (Verifica a cada 30 segundos)
   setInterval(checkScheduledMessages, 30000);
+
+  // Iniciar Loop de Lembretes de Consulta (Verifica a cada 60 segundos)
+  setInterval(checkAppointmentReminders, 60000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

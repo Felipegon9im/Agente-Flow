@@ -105,6 +105,19 @@ async function loadAndDisplaySettings() {
   document.getElementById('working-hours-end').value = currentSettings.workingHoursEnd || '18:00';
   document.getElementById('slot-duration').value = currentSettings.slotDuration || 60;
 
+  // Configurações de Lembrete
+  const reminderCheckbox = document.getElementById('agenda-reminder-enabled');
+  const reminderHoursGroup = document.getElementById('group-reminder-hours');
+  if (reminderCheckbox && reminderHoursGroup) {
+    const updateReminderVisibility = () => {
+      reminderHoursGroup.style.display = reminderCheckbox.checked ? 'block' : 'none';
+    };
+    reminderCheckbox.addEventListener('change', updateReminderVisibility);
+    reminderCheckbox.checked = currentSettings.appointmentsReminderEnabled !== false;
+    document.getElementById('agenda-reminder-hours').value = currentSettings.appointmentsReminderHours || 2;
+    updateReminderVisibility();
+  }
+
   // Atualizar porta Express na Dashboard
   document.getElementById('dash-express-port').textContent = currentSettings.expressPort || 3003;
 
@@ -512,10 +525,15 @@ function initAgendaUI() {
     const end = document.getElementById('working-hours-end').value;
     const duration = parseInt(document.getElementById('slot-duration').value, 10);
 
+    const reminderEnabled = document.getElementById('agenda-reminder-enabled').checked;
+    const reminderHours = parseInt(document.getElementById('agenda-reminder-hours').value, 10);
+
     const success = await window.api.saveSettings({
       workingHoursStart: start,
       workingHoursEnd: end,
-      slotDuration: duration
+      slotDuration: duration,
+      appointmentsReminderEnabled: reminderEnabled,
+      appointmentsReminderHours: reminderHours
     });
 
     if (success) {

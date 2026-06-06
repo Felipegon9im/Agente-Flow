@@ -439,6 +439,26 @@
                   </select>
                 </div>
                 
+                <!-- Opções de Lembrete Automático -->
+                <div class="panel-section-divider" style="margin: 15px 0; border-top: 1px dotted var(--border-color);"></div>
+                
+                <div class="form-group" style="display: flex; align-items: center; gap: 8px; flex-direction: row; margin-bottom: 12px;">
+                  <input type="checkbox" id="agenda-reminder-enabled" checked style="width: 16px; height: 16px; margin: 0; cursor: pointer;">
+                  <label for="agenda-reminder-enabled" style="margin: 0; cursor: pointer; font-size: 13px;">Enviar lembrete por WhatsApp</label>
+                </div>
+
+                <div class="form-group" id="group-reminder-hours" style="margin-bottom: 12px;">
+                  <label for="agenda-reminder-hours">Enviar lembrete antes (Horas)</label>
+                  <select id="agenda-reminder-hours">
+                    <option value="1">1 hora antes</option>
+                    <option value="2" selected>2 horas antes</option>
+                    <option value="3">3 horas antes</option>
+                    <option value="6">6 horas antes</option>
+                    <option value="12">12 horas antes</option>
+                    <option value="24">24 horas antes (1 dia)</option>
+                  </select>
+                </div>
+                
                 <button type="submit" class="btn btn-primary w-full" style="margin-top: 12px;" id="btn-save-agenda-settings">Salvar Configurações</button>
               </form>
 
