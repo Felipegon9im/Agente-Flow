@@ -135,7 +135,7 @@ function broadcastStats() {
 function loadSettings() {
   const defaultSettings = {
     geminiApiKey: '',
-    geminiModel: 'gemini-2.0-flash',
+    geminiModel: 'gemini-2.5-flash',
     systemPrompt: 'Você é um assistente virtual inteligente e prestativo para atendimento ao cliente no WhatsApp. Responda de forma curta, objetiva, profissional e amigável. Para agendamentos, você possui ferramentas para ver os horários disponíveis (ver_horarios_disponiveis) e para confirmar a reserva (confirmar_agendamento) quando o cliente escolher. Sempre pergunte o nome do cliente antes de confirmar.',
     temperature: 0.7,
     n8nTools: [],
