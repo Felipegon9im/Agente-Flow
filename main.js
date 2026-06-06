@@ -970,6 +970,17 @@ ipcMain.handle('appointment-delete', (event, id) => {
   return true;
 });
 
+ipcMain.handle('appointment-create', (event, { name, phone, date, time }) => {
+  try {
+    const booking = bookSlot(name, phone, date, time);
+    logToUI('SYSTEM', `Novo agendamento manual criado via UI: ${name} (${phone}) em ${date} às ${time}`);
+    return { success: true, appointment: booking };
+  } catch (err) {
+    logToUI('SYSTEM', `Erro ao criar agendamento manual: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.on('log-error-to-main', (event, err) => {
   try {
     fs.appendFileSync('c:\\Users\\Felipe Gondim\\HUB_Projetos\\Agente\\app_debug.log', `[${new Date().toLocaleTimeString()}] [RENDERER ERROR] ${JSON.stringify(err, null, 2)}\n`);

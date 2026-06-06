@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   // Agenda / Consultas por IA
   cancelAppointment: (id) => ipcRenderer.invoke('appointment-cancel', id),
   deleteAppointment: (id) => ipcRenderer.invoke('appointment-delete', id),
+  createAppointment: (data) => ipcRenderer.invoke('appointment-create', data),
   onAppointmentsUpdate: (callback) => ipcRenderer.on('appointments-update', (event, list) => callback(list)),
 
   // Debug / Logs de Erros do Renderer

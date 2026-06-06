@@ -442,6 +442,35 @@
                 <button type="submit" class="btn btn-primary w-full" style="margin-top: 12px;" id="btn-save-agenda-settings">Salvar Configurações</button>
               </form>
 
+              <div class="panel-section-divider" style="margin: 20px 0; border-top: 1px solid var(--border-color);"></div>
+
+              <h3 style="margin-top: 10px;">Agendamento Manual</h3>
+              <p class="section-desc">Insira uma reserva diretamente na agenda.</p>
+              
+              <form id="manual-appointment-form" style="margin-top: 10px;">
+                <div class="form-group">
+                  <label for="manual-client-name">Nome do Cliente</label>
+                  <input type="text" id="manual-client-name" placeholder="Ex: João Silva" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="manual-client-phone">Telefone / WhatsApp</label>
+                  <input type="text" id="manual-client-phone" placeholder="Ex: 5548999999999" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="manual-date">Data</label>
+                  <input type="date" id="manual-date" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="manual-time">Horário</label>
+                  <input type="time" id="manual-time" required>
+                </div>
+                
+                <button type="submit" class="btn btn-secondary w-full" style="margin-top: 12px;">Reservar Horário</button>
+              </form>
+
               <div class="n8n-info-card" style="margin-top: 24px;">
                 <h4>💡 Como Funciona</h4>
                 <p class="n8n-help-text" style="font-size:12px; margin-top:6px;">

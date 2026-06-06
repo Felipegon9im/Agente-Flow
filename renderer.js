@@ -526,6 +526,28 @@ function initAgendaUI() {
     }
   });
 
+  // Salvar agendamento manual
+  const manualForm = document.getElementById('manual-appointment-form');
+  if (manualForm) {
+    manualForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('manual-client-name').value;
+      const phone = document.getElementById('manual-client-phone').value;
+      const date = document.getElementById('manual-date').value;
+      const time = document.getElementById('manual-time').value;
+
+      const result = await window.api.createAppointment({ name, phone, date, time });
+
+      if (result.success) {
+        alert('Compromisso agendado com sucesso!');
+        manualForm.reset();
+      } else {
+        alert(`Erro ao criar agendamento: ${result.error}`);
+      }
+    });
+  }
+
   // Ouvir atualizações de agendamentos realizados pela IA
   window.api.onAppointmentsUpdate((list) => {
     currentSettings.appointments = list;
