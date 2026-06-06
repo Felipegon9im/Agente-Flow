@@ -49,22 +49,30 @@ function updateTrayStatus(status) {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'icon.png');
-  tray = new Tray(iconPath);
-  
-  tray.setToolTip('ZapFlow AI - WhatsApp Agent');
-  updateTrayStatus(connectionStatus);
-  
-  tray.on('click', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+  try {
+    const iconPath = path.join(__dirname, 'icon.png');
+    if (!fs.existsSync(iconPath)) {
+      logToUI('SYSTEM', `Aviso: icon.png não encontrado para a bandeja do sistema.`);
+      return;
     }
-  });
+    tray = new Tray(iconPath);
+    
+    tray.setToolTip('ZapFlow AI - WhatsApp Agent');
+    updateTrayStatus(connectionStatus);
+    
+    tray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+        } else {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    });
+  } catch (err) {
+    logToUI('SYSTEM', `Erro ao criar ícone de bandeja: ${err.message}`);
+  }
 }
 let expressServer = null;
 

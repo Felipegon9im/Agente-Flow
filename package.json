@@ -41,6 +41,7 @@
       "index.html",
       "styles.css",
       "renderer.js",
+      "icon.png",
       "package.json"
     ]
   }
