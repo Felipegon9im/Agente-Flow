@@ -136,7 +136,7 @@ function loadSettings() {
   const defaultSettings = {
     geminiApiKey: '',
     geminiModel: 'gemini-2.5-flash',
-    systemPrompt: 'Você é um assistente virtual inteligente e prestativo para atendimento ao cliente no WhatsApp. Responda de forma curta, objetiva, profissional e amigável. Para agendamentos, você possui ferramentas para ver os horários disponíveis (ver_horarios_disponiveis) e para confirmar a reserva (confirmar_agendamento) quando o cliente escolher. Sempre pergunte o nome do cliente antes de confirmar.',
+    systemPrompt: 'Você é um assistente virtual inteligente e prestativo para atendimento ao cliente no WhatsApp. Responda de forma curta, objetiva, profissional e amigável. Ao listar horários disponíveis, organize-os em tópicos com marcadores e emojis (ex: ⏰ 09:00). Ao confirmar um agendamento com sucesso, use sempre um formato altamente estruturado e visual com emojis e negritos (ex: ✅ *Agendamento Confirmado!*\\n📅 *Data:* ...\\n⏰ *Horário:* ...\\n👤 *Cliente:* ...). Para agendamentos, você possui as ferramentas "ver_horarios_disponiveis" e "confirmar_agendamento". Sempre pergunte o nome do cliente antes de reservar.',
     temperature: 0.7,
     n8nTools: [],
     expressPort: 3003,
@@ -656,7 +656,7 @@ function checkAppointmentReminders() {
           displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
 
-        const reminderText = `⏰ *Lembrete de Agendamento*\n\nOlá, *${app.name}*!\nPassando para lembrar do seu compromisso agendado para hoje, *${displayDate}* às *${app.time}* hrs.\n\nContamos com a sua presença!`;
+        const reminderText = `⏰ *Lembrete de Compromisso*\n\nOlá, *${app.name}*!\nEste é um lembrete amigável sobre o seu horário reservado para hoje:\n\n📅 *Data:* ${displayDate}\n⏰ *Horário:* ${app.time} hrs\n👤 *Profissional:* Atendimento Geral\n\nContamos com a sua presença!\n_Caso precise remarcar ou cancelar, por favor nos avise._\n━━━━━━━━━━━━━━━━━━\n*ZapFlow AI* | Automação Inteligente`;
 
         await sock.sendMessage(app.phone, { text: reminderText });
         logToUI('WHATSAPP', `Lembrete automático enviado para ${app.phone} (Compromisso às ${app.time})`);
@@ -1035,7 +1035,7 @@ ipcMain.handle('appointment-create', async (event, { name, phone, date, time }) 
           displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         
-        const confirmText = `Olá, *${name.trim()}*! Seu agendamento foi confirmado para o dia *${displayDate}* às *${time}* hrs. Obrigado!`;
+        const confirmText = `✅ *Agendamento Confirmado!*\n\nOlá, *${name.trim()}*!\nSeu compromisso foi agendado manualmente com sucesso.\n\n📅 *Data:* ${displayDate}\n⏰ *Horário:* ${time} hrs\n👤 *Profissional:* Atendimento Geral\n\n━━━━━━━━━━━━━━━━━━\n*ZapFlow AI* | Automação Inteligente`;
         await sock.sendMessage(booking.phone, { text: confirmText });
         logToUI('WHATSAPP', `Mensagem de confirmação manual enviada para ${booking.phone}`);
       } catch (sendErr) {
