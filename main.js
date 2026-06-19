@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -719,7 +719,7 @@ async function checkScheduledMessages() {
       }
       logToUI('SYSTEM', `Disparando mensagem agendada (ID: ${schedule.id}) para ${targetJid}`);
       try {
-        await sock.sendMessage(targetJid, { text: schedule.message });
+        await sendWhatsAppMessageWithMedia(targetJid, schedule.message, schedule.filePath);
         
         schedule.lastRun = now;
         schedule.nextRun = calculateNextRun(schedule);
@@ -854,7 +854,96 @@ ipcMain.on('whatsapp-disconnect', async () => {
   }
 });
 
-ipcMain.handle('whatsapp-send-message', async (event, jid, text) => {
+function getMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.pdf': return 'application/pdf';
+    case '.doc':
+    case '.docx': return 'application/msword';
+    case '.xls':
+    case '.xlsx': return 'application/vnd.ms-excel';
+    case '.ppt':
+    case '.pptx': return 'application/vnd.ms-powerpoint';
+    case '.zip': return 'application/zip';
+    case '.rar': return 'application/x-rar-compressed';
+    case '.txt': return 'text/plain';
+    case '.csv': return 'text/csv';
+    case '.png': return 'image/png';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.gif': return 'image/gif';
+    case '.webp': return 'image/webp';
+    case '.mp3': return 'audio/mpeg';
+    case '.ogg': return 'audio/ogg';
+    case '.wav': return 'audio/wav';
+    case '.m4a': return 'audio/mp4';
+    case '.mp4': return 'video/mp4';
+    case '.mov': return 'video/quicktime';
+    default: return 'application/octet-stream';
+  }
+}
+
+async function sendWhatsAppMessageWithMedia(jid, text, filePath) {
+  if (!sock) throw new Error('WhatsApp não está conectado.');
+
+  // Se não foi fornecido arquivo ou o arquivo não existe, envia texto comum
+  if (!filePath || !fs.existsSync(filePath)) {
+    if (filePath) {
+      logToUI('SYSTEM', `Aviso: Arquivo em '${filePath}' não encontrado. Enviando como texto comum.`);
+    }
+    await sock.sendMessage(jid, { text });
+    return;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeType = getMimeType(filePath);
+  const fileName = path.basename(filePath);
+
+  let payload = {};
+
+  if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) {
+    payload = {
+      image: { url: filePath },
+      caption: text
+    };
+  } else if (['.mp4', '.mov', '.avi', '.mkv'].includes(ext)) {
+    payload = {
+      video: { url: filePath },
+      caption: text
+    };
+  } else if (['.mp3', '.ogg', '.wav', '.m4a'].includes(ext)) {
+    payload = {
+      audio: { url: filePath },
+      mimetype: mimeType,
+      ptt: ext === '.ogg'
+    };
+  } else {
+    payload = {
+      document: { url: filePath },
+      mimetype: mimeType,
+      fileName: fileName,
+      caption: text
+    };
+  }
+
+  await sock.sendMessage(jid, payload);
+}
+
+ipcMain.handle('select-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'Arquivos de Mídia/Documentos', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg', 'm4a', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'zip', 'rar'] },
+      { name: 'Todos os Arquivos', extensions: ['*'] }
+    ]
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('whatsapp-send-message', async (event, jid, text, filePath) => {
   if (connectionStatus !== 'connected' || !sock) {
     throw new Error('WhatsApp não está conectado.');
   }
@@ -863,8 +952,8 @@ ipcMain.handle('whatsapp-send-message', async (event, jid, text) => {
     targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
   }
   
-  logToUI('WHATSAPP', `Enviando mensagem de teste para ${targetJid}...`);
-  await sock.sendMessage(targetJid, { text });
+  logToUI('WHATSAPP', `Enviando mensagem para ${targetJid}${filePath ? ' com anexo' : ''}...`);
+  await sendWhatsAppMessageWithMedia(targetJid, text, filePath);
   
   stats.totalSent++;
   broadcastStats();
@@ -893,6 +982,7 @@ ipcMain.handle('schedule-save', (event, scheduleData) => {
     id: scheduleData.id || Date.now().toString(),
     target: scheduleData.target.trim(),
     message: scheduleData.message.trim(),
+    filePath: scheduleData.filePath || '',
     type: scheduleData.type,
     intervalValue: parseInt(scheduleData.intervalValue, 10) || 1,
     intervalUnit: scheduleData.intervalUnit || 'hours',
@@ -962,7 +1052,7 @@ ipcMain.handle('schedule-trigger-now', async (event, id) => {
       if (!targetJid.includes('@')) {
         targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
       }
-      await sock.sendMessage(targetJid, { text: schedule.message });
+      await sendWhatsAppMessageWithMedia(targetJid, schedule.message, schedule.filePath);
       schedule.lastRun = Date.now();
       schedule.nextRun = calculateNextRun(schedule);
       saveSettings({ scheduledMessages: list });

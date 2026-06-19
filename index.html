@@ -255,9 +255,21 @@
                   <input type="text" id="test-phone" placeholder="ex: 5511999999999" required>
                   <small>Utilize somente números com código do país (ex: 55 para Brasil).</small>
                 </div>
-                <div class="form-group">
+                 <div class="form-group">
                   <label for="test-message">Mensagem</label>
-                  <textarea id="test-message" rows="4" placeholder="Escreva uma mensagem de teste..." required></textarea>
+                  <textarea id="test-message" rows="4" placeholder="Escreva uma mensagem de teste..."></textarea>
+                </div>
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label>Anexo (Opcional)</label>
+                  <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-select-test-file" style="padding: 8px 12px; margin: 0; white-space: nowrap;">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                      Selecionar Arquivo
+                    </button>
+                    <span id="test-file-name" style="font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">Nenhum arquivo</span>
+                    <button type="button" class="btn btn-danger btn-sm" id="btn-remove-test-file" style="display: none; padding: 4px 6px; margin: 0; line-height: 1;">✖</button>
+                  </div>
+                  <input type="hidden" id="test-file-path" value="">
                 </div>
                 <button type="submit" class="btn btn-secondary w-full" id="btn-send-test">Enviar Mensagem</button>
               </form>
@@ -575,7 +587,20 @@
 
                 <div class="form-group flex-2 w-full" style="grid-column: span 2;">
                   <label for="sched-message">Conteúdo da Mensagem</label>
-                  <textarea id="sched-message" rows="3" placeholder="Escreva a mensagem que deseja enviar recorrentemente..." required></textarea>
+                  <textarea id="sched-message" rows="3" placeholder="Escreva a mensagem que deseja enviar recorrentemente..."></textarea>
+                </div>
+
+                <div class="form-group flex-2 w-full" style="grid-column: span 2; margin-bottom: 10px;">
+                  <label>Anexo (Opcional)</label>
+                  <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-select-sched-file" style="padding: 8px 12px; margin: 0; white-space: nowrap;">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                      Selecionar Arquivo
+                    </button>
+                    <span id="sched-file-name" style="font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;">Nenhum arquivo</span>
+                    <button type="button" class="btn btn-danger btn-sm" id="btn-remove-sched-file" style="display: none; padding: 4px 6px; margin: 0; line-height: 1;">✖</button>
+                  </div>
+                  <input type="hidden" id="sched-file-path" value="">
                 </div>
 
                 <div class="form-group-button" style="grid-column: span 2; margin-top: 8px;">

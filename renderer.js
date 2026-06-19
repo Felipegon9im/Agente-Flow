@@ -272,6 +272,28 @@ function initWhatsAppUI() {
     }
   });
 
+  // Lógica de arquivo para teste de envio
+  const btnSelectTestFile = document.getElementById('btn-select-test-file');
+  const spanTestFileName = document.getElementById('test-file-name');
+  const btnRemoveTestFile = document.getElementById('btn-remove-test-file');
+  const inputTestFilePath = document.getElementById('test-file-path');
+
+  btnSelectTestFile.addEventListener('click', async () => {
+    const filePath = await window.api.selectFile();
+    if (filePath) {
+      inputTestFilePath.value = filePath;
+      const name = filePath.split(/[\\/]/).pop();
+      spanTestFileName.textContent = name;
+      btnRemoveTestFile.style.display = 'inline-block';
+    }
+  });
+
+  btnRemoveTestFile.addEventListener('click', () => {
+    inputTestFilePath.value = '';
+    spanTestFileName.textContent = 'Nenhum arquivo';
+    btnRemoveTestFile.style.display = 'none';
+  });
+
   // Formulário de envio de mensagem de teste
   const testForm = document.getElementById('test-message-form');
   testForm.addEventListener('submit', async (e) => {
@@ -282,14 +304,23 @@ function initWhatsAppUI() {
 
     const phone = phoneInput.value.trim();
     const message = msgInput.value.trim();
+    const filePath = inputTestFilePath.value;
+
+    if (!message && !filePath) {
+      alert('Escreva uma mensagem ou selecione um arquivo para enviar.');
+      return;
+    }
 
     btnSend.disabled = true;
     btnSend.textContent = 'Enviando...';
 
     try {
-      await window.api.sendManualMessage(phone, message);
-      alert('Mensagem de teste enviada com sucesso!');
+      await window.api.sendManualMessage(phone, message, filePath);
+      alert('Mensagem enviada com sucesso!');
       msgInput.value = '';
+      inputTestFilePath.value = '';
+      spanTestFileName.textContent = 'Nenhum arquivo';
+      btnRemoveTestFile.style.display = 'none';
     } catch (err) {
       alert(`Falha ao enviar: ${err.message}`);
     } finally {
@@ -690,11 +721,13 @@ function initSchedulerUI() {
     const intervalValue = document.getElementById('sched-interval-val').value;
     const intervalUnit = document.getElementById('sched-interval-unit').value;
     const dailyTime = document.getElementById('sched-daily-time').value;
+    const filePath = document.getElementById('sched-file-path').value;
 
     const scheduleData = {
       id: id || undefined,
       target,
       message,
+      filePath,
       type,
       intervalValue,
       intervalUnit,
@@ -709,6 +742,28 @@ function initSchedulerUI() {
     } else {
       alert('Erro ao salvar agendamento.');
     }
+  });
+
+  // Lógica de arquivo para agendador
+  const btnSelectSchedFile = document.getElementById('btn-select-sched-file');
+  const spanSchedFileName = document.getElementById('sched-file-name');
+  const btnRemoveSchedFile = document.getElementById('btn-remove-sched-file');
+  const inputSchedFilePath = document.getElementById('sched-file-path');
+
+  btnSelectSchedFile.addEventListener('click', async () => {
+    const filePath = await window.api.selectFile();
+    if (filePath) {
+      inputSchedFilePath.value = filePath;
+      const name = filePath.split(/[\\/]/).pop();
+      spanSchedFileName.textContent = name;
+      btnRemoveSchedFile.style.display = 'inline-block';
+    }
+  });
+
+  btnRemoveSchedFile.addEventListener('click', () => {
+    inputSchedFilePath.value = '';
+    spanSchedFileName.textContent = 'Nenhum arquivo';
+    btnRemoveSchedFile.style.display = 'none';
   });
 
   // Cancelar Edição
@@ -752,9 +807,18 @@ function renderSchedulesTable() {
 
     const truncatedMessage = item.message.length > 50 ? item.message.substring(0, 47) + '...' : item.message;
 
+    let messageDisplay = escapeHtml(truncatedMessage);
+    if (item.filePath) {
+      const fileName = item.filePath.split(/[\\/]/).pop();
+      messageDisplay = `<div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
+        <span style="font-size:14px; line-height: 1;">📎</span>
+        <span style="font-size:11px; color:var(--primary-color); font-weight:600; text-decoration:underline;" title="${escapeHtml(item.filePath)}">${escapeHtml(fileName)}</span>
+      </div>${messageDisplay ? '<div style="font-size:12px;">' + messageDisplay + '</div>' : ''}`;
+    }
+
     tr.innerHTML = `
       <td><span style="font-size:11px;font-family:var(--font-mono);">${escapeHtml(item.target)}</span></td>
-      <td title="${escapeHtml(item.message)}">${escapeHtml(truncatedMessage)}</td>
+      <td title="${escapeHtml(item.message)}">${messageDisplay}</td>
       <td><strong>${ruleText}</strong></td>
       <td><span style="font-size:11px;color:var(--text-muted);">${lastRunText}</span></td>
       <td><span style="font-size:11px;font-weight:600;color:var(--primary-color);">${nextRunText}</span></td>
@@ -787,6 +851,10 @@ function resetSchedulerForm() {
   document.getElementById('sched-interval-val-group').style.display = 'flex';
   document.getElementById('sched-interval-unit-group').style.display = 'flex';
   document.getElementById('sched-daily-time-group').style.display = 'none';
+
+  document.getElementById('sched-file-path').value = '';
+  document.getElementById('sched-file-name').textContent = 'Nenhum arquivo';
+  document.getElementById('btn-remove-sched-file').style.display = 'none';
 
   document.getElementById('btn-save-sched').textContent = 'Salvar Programação';
   document.getElementById('btn-cancel-sched-edit').style.display = 'none';
@@ -824,6 +892,17 @@ function editSchedule(id) {
   document.getElementById('sched-interval-val').value = item.intervalValue || 1;
   document.getElementById('sched-interval-unit').value = item.intervalUnit || 'hours';
   document.getElementById('sched-daily-time').value = item.dailyTime || '';
+
+  if (item.filePath) {
+    document.getElementById('sched-file-path').value = item.filePath;
+    const name = item.filePath.split(/[\\/]/).pop();
+    document.getElementById('sched-file-name').textContent = name;
+    document.getElementById('btn-remove-sched-file').style.display = 'inline-block';
+  } else {
+    document.getElementById('sched-file-path').value = '';
+    document.getElementById('sched-file-name').textContent = 'Nenhum arquivo';
+    document.getElementById('btn-remove-sched-file').style.display = 'none';
+  }
 
   // Forçar visibilidade dos campos
   const typeSelect = document.getElementById('sched-type');

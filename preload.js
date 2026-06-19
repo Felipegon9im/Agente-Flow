@@ -8,7 +8,8 @@ contextBridge.exposeInMainWorld('api', {
   // Ações do WhatsApp
   connectWhatsApp: () => ipcRenderer.send('whatsapp-connect'),
   disconnectWhatsApp: () => ipcRenderer.send('whatsapp-disconnect'),
-  sendManualMessage: (jid, text) => ipcRenderer.invoke('whatsapp-send-message', jid, text),
+  sendManualMessage: (jid, text, filePath) => ipcRenderer.invoke('whatsapp-send-message', jid, text, filePath),
+  selectFile: () => ipcRenderer.invoke('select-file'),
 
   // Escuta de Eventos
   onWhatsAppStatus: (callback) => ipcRenderer.on('whatsapp-status', (event, status) => callback(status)),
