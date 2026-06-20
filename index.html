@@ -82,6 +82,14 @@
           </svg>
           Cobranças
         </button>
+        <button class="nav-item" data-tab="sales-bot">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          Robô de Vendas
+        </button>
         <button class="nav-item" data-tab="console">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"/>
@@ -734,6 +742,98 @@
                   <tbody id="billings-table-body">
                     <tr>
                       <td colspan="6" class="empty-table">Nenhuma fatura de cobrança cadastrada ainda.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ABA: ROBÔ DE VENDAS -->
+        <section class="tab-panel" id="sales-bot-panel">
+          <div class="panel-section" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; padding: 20px 24px;">
+            <div>
+              <h3 style="font-family:var(--font-title); font-size:18px; font-weight:600; color:#fff;">Robô de Vendas (Fluxo Conversacional Numérico)</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Crie menus numéricos interativos (Ura) para o seu WhatsApp. Você pode transferir o atendimento para a IA ou para um Atendente Humano.</p>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <label for="sales-bot-active-toggle" class="label-toggle" style="margin: 0; display: flex; align-items: center; gap: 12px; font-size:14px; font-weight:500;">
+                Ativar Robô de Vendas
+                <input type="checkbox" id="sales-bot-active-toggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="scheduler-container">
+            <!-- Formulário de Menu Node -->
+            <div class="panel-section side-panel" style="flex: 1; max-width: 450px;">
+              <h3 id="sales-node-form-title">Cadastrar Novo Menu</h3>
+              <form id="sales-node-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                <input type="hidden" id="node-edit-id" value="">
+
+                <div class="form-group">
+                  <label for="node-name">Nome do Menu (Identificador Interno)</label>
+                  <input type="text" id="node-name" placeholder="ex: Menu Principal, Menu Planos" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="node-id-val">ID do Menu (Minúsculo, sem espaço)</label>
+                  <input type="text" id="node-id-val" placeholder="ex: main, planos, suporte" required>
+                  <small style="color:var(--text-muted);">Use <strong>main</strong> para o menu inicial do WhatsApp.</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="node-text">Mensagem enviada ao entrar neste menu</label>
+                  <textarea id="node-text" rows="5" placeholder="Olá! Escolha uma opção:&#10;1 - Saber mais&#10;2 - Falar com atendente" required style="resize: vertical; min-height: 100px;"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="node-action">Ação de Entrada (Se houver)</label>
+                  <select id="node-action">
+                    <option value="none" selected>Nenhuma (Apenas envia a mensagem e espera dígitos)</option>
+                    <option value="transfer_to_ai">Transferir para IA (Gemini assume a partir daqui)</option>
+                    <option value="transfer_to_human">Transferir para Humano (Pausa o robô e a IA)</option>
+                  </select>
+                </div>
+
+                <!-- Lista de Opções / Teclado -->
+                <div class="form-group" id="node-options-section">
+                  <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span>Teclado / Opções de Navegação</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-add-node-option" style="padding: 4px 8px; font-size: 11px; margin:0;">+ Adicionar Dígito</button>
+                  </label>
+                  <div id="node-options-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px; max-height: 200px; overflow-y: auto; padding-right: 4px;">
+                    <!-- Inserido dinamicamente via JS -->
+                  </div>
+                </div>
+
+                <div class="form-group-button" style="margin-top: 8px; display: flex; gap: 8px;">
+                  <button type="submit" class="btn btn-primary" id="btn-save-node" style="flex: 1;">Salvar Menu</button>
+                  <button type="button" class="btn btn-secondary" id="btn-cancel-node-edit" style="display:none;">Cancelar</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Listagem de Menus -->
+            <div class="panel-section flex-1">
+              <h3>Fluxograma / Nós de Menus Ativos</h3>
+              <div class="tools-table-container">
+                <table class="tools-table" id="nodes-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 130px;">ID / Nome</th>
+                      <th>Mensagem do Menu</th>
+                      <th style="width: 130px;">Ação</th>
+                      <th style="width: 140px;">Teclas Associadas</th>
+                      <th style="width: 160px; text-align: center;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="nodes-table-body">
+                    <tr>
+                      <td colspan="5" class="empty-table">Nenhum nó de menu cadastrado ainda.</td>
                     </tr>
                   </tbody>
                 </table>

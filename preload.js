@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld('api', {
   triggerBillingNow: (id) => ipcRenderer.invoke('billing-trigger-now', id),
   onBillingsUpdate: (callback) => ipcRenderer.on('billings-update', (event, list) => callback(list)),
 
+  // Robô de Vendas (Fluxo Numérico)
+  saveSalesNode: (nodeData) => ipcRenderer.invoke('sales-node-save', nodeData),
+  deleteSalesNode: (id) => ipcRenderer.invoke('sales-node-delete', id),
+  onSalesFlowUpdate: (callback) => ipcRenderer.on('sales-flow-update', (event, salesFlow) => callback(salesFlow)),
+
   // Debug / Logs de Erros do Renderer
   logError: (err) => ipcRenderer.send('log-error-to-main', err)
 });

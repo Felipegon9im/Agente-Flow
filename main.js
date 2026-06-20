@@ -108,6 +108,9 @@ const stats = {
 // Histórico de conversas (para manter contexto da IA)
 const chatHistories = new Map();
 
+// Estados do Robô de Vendas (JID -> { currentNodeId, mode })
+const salesFlowStates = new Map();
+
 // Caminhos locais
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 const authFolder = path.join(app.getPath('userData'), 'baileys_auth');
@@ -146,7 +149,97 @@ function loadSettings() {
     workingHoursEnd: '18:00',
     slotDuration: 60,
     appointments: [],
-    billings: []
+    billings: [],
+    salesBotEnabled: false,
+    salesFlow: {
+      nodes: [
+        {
+          id: 'main',
+          name: 'Menu Principal',
+          text: 'Olá! Seja bem-vindo ao nosso atendimento.\nDigite o número correspondente à opção desejada:\n\n1 - Conhecer Planos de Internet 🌐\n2 - Suporte Técnico 🛠️\n3 - Falar com o Assistente IA 🤖\n4 - Falar com Atendente Humano 👤',
+          action: 'none',
+          options: [
+            { trigger: '1', targetNodeId: 'planos' },
+            { trigger: '2', targetNodeId: 'suporte' },
+            { trigger: '3', targetNodeId: 'transfer_ai' },
+            { trigger: '4', targetNodeId: 'transfer_human' }
+          ]
+        },
+        {
+          id: 'planos',
+          name: 'Planos de Internet',
+          text: 'Conheça nossos planos ultra-rápidos:\n\n11 - Plano Basic (100 Mega) - R$ 49/mês 📉\n12 - Plano Pro (500 Mega) - R$ 99/mês 🚀\n0 - Voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '11', targetNodeId: 'plan_basic' },
+            { trigger: '12', targetNodeId: 'plan_pro' },
+            { trigger: '0', targetNodeId: 'main' }
+          ]
+        },
+        {
+          id: 'plan_basic',
+          name: 'Plano Basic',
+          text: 'O Plano Basic oferece 100 Mega de velocidade via fibra óptica por apenas R$ 49/mês. Ideal para navegação básica e redes sociais.\n\nDigite 0 para voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '0', targetNodeId: 'main' }
+          ]
+        },
+        {
+          id: 'plan_pro',
+          name: 'Plano Pro',
+          text: 'O Plano Pro oferece 500 Mega de velocidade via fibra óptica por apenas R$ 99/mês. Excelente para streaming em 4K, jogos online e múltiplos dispositivos simultâneos.\n\nDigite 0 para voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '0', targetNodeId: 'main' }
+          ]
+        },
+        {
+          id: 'suporte',
+          name: 'Suporte Técnico',
+          text: 'Como podemos te ajudar hoje?\n\n21 - Internet Lenta 🐢\n22 - Sem Sinal de Internet ❌\n0 - Voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '21', targetNodeId: 'suporte_lenta' },
+            { trigger: '22', targetNodeId: 'suporte_sem' },
+            { trigger: '0', targetNodeId: 'main' }
+          ]
+        },
+        {
+          id: 'suporte_lenta',
+          name: 'Internet Lenta',
+          text: 'Para resolver lentidão, sugerimos retirar o modem da tomada de energia, aguardar 30 segundos e ligar novamente. Se o problema persistir, digite 4 para falar com suporte humano.\n\nDigite 0 para voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '0', targetNodeId: 'main' },
+            { trigger: '4', targetNodeId: 'transfer_human' }
+          ]
+        },
+        {
+          id: 'suporte_sem',
+          name: 'Sem Conexão',
+          text: 'Verificamos que pode haver uma manutenção na sua região. Um técnico foi alertado e entrará em contato em até 2 horas.\n\nDigite 0 para voltar ao Menu Principal ↩️',
+          action: 'none',
+          options: [
+            { trigger: '0', targetNodeId: 'main' }
+          ]
+        },
+        {
+          id: 'transfer_ai',
+          name: 'Transferir para IA',
+          text: 'Transferindo para o nosso Assistente Virtual Inteligente (IA) alimentado por Gemini. Como posso te ajudar hoje? (Você pode digitar #menu a qualquer momento para voltar ao menu de opções)',
+          action: 'transfer_to_ai',
+          options: []
+        },
+        {
+          id: 'transfer_human',
+          name: 'Transferir para Humano',
+          text: 'Menu de robô pausado. Um atendente humano irá assumir esta conversa em instantes para te ajudar pessoalmente! Obrigado pela paciência.',
+          action: 'transfer_to_human',
+          options: []
+        }
+      ]
+    }
   };
 
   try {
@@ -351,6 +444,18 @@ async function startWhatsAppConnection() {
         // Responder apenas a DMs (Ignorar Grupos e Listas de Transmissão por padrão)
         if (!jid.endsWith('@s.whatsapp.net') && !jid.endsWith('@lid')) continue;
 
+        // Executar Robô de Vendas se ativo
+        let processedBySalesBot = false;
+        if (settings.salesBotEnabled) {
+          try {
+            processedBySalesBot = await handleSalesBotMessage(jid, text);
+          } catch (err) {
+            logToUI('SYSTEM', `Erro no Robô de Vendas: ${err.message}`);
+          }
+        }
+
+        if (processedBySalesBot) continue;
+
         // Executar Inteligência Artificial se ativa
         if (settings.aiEnabled && settings.geminiApiKey) {
           try {
@@ -366,6 +471,104 @@ async function startWhatsAppConnection() {
     logToUI('SYSTEM', `Erro ao inicializar conexão Baileys: ${err.message}`);
     setConnectionStatus('disconnected');
   }
+}
+
+// --- Robô de Vendas (Máquina de Estados conversacional) ---
+async function handleSalesBotMessage(jid, text) {
+  const cleanedText = text.trim();
+  let state = salesFlowStates.get(jid);
+
+  // Comando global para voltar ao menu
+  if (cleanedText.toLowerCase() === '#menu' || cleanedText.toLowerCase() === '#sair') {
+    salesFlowStates.set(jid, { currentNodeId: 'main', mode: 'sales' });
+    const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
+    if (mainNode) {
+      await sock.sendMessage(jid, { text: mainNode.text });
+      stats.totalSent++;
+      broadcastStats();
+    }
+    return true;
+  }
+
+  // Se o estado existe e o modo for human, ignoramos (nenhuma resposta automática)
+  if (state && state.mode === 'human') {
+    return true;
+  }
+
+  // Se o estado existe e o modo for ai, deixamos passar para a IA (retorna false)
+  if (state && state.mode === 'ai') {
+    return false;
+  }
+
+  // Se não tem estado cadastrado, inicializa no Menu Principal
+  if (!state) {
+    state = { currentNodeId: 'main', mode: 'sales' };
+    salesFlowStates.set(jid, state);
+    const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
+    if (mainNode) {
+      await sock.sendMessage(jid, { text: mainNode.text });
+      stats.totalSent++;
+      broadcastStats();
+    }
+    return true;
+  }
+
+  // Processa opções no modo sales
+  const currentNode = settings.salesFlow.nodes.find(n => n.id === state.currentNodeId);
+  if (!currentNode) {
+    // Se o nó atual sumiu/inválido, reseta para o principal
+    state.currentNodeId = 'main';
+    salesFlowStates.set(jid, state);
+    const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
+    if (mainNode) {
+      await sock.sendMessage(jid, { text: mainNode.text });
+      stats.totalSent++;
+      broadcastStats();
+    }
+    return true;
+  }
+
+  // Verifica se o texto coincide com alguma das opções
+  const matchedOption = currentNode.options.find(opt => opt.trigger.trim().toLowerCase() === cleanedText.toLowerCase());
+
+  if (matchedOption) {
+    const targetNode = settings.salesFlow.nodes.find(n => n.id === matchedOption.targetNodeId);
+    if (targetNode) {
+      // Atualiza estado
+      state.currentNodeId = targetNode.id;
+      if (targetNode.action === 'transfer_to_ai') {
+        state.mode = 'ai';
+        logToUI('SYSTEM', `Cliente ${jid} transferido para Inteligência Artificial.`);
+      } else if (targetNode.action === 'transfer_to_human') {
+        state.mode = 'human';
+        logToUI('SYSTEM', `Cliente ${jid} transferido para Atendimento Humano (Robô pausado).`);
+      }
+      salesFlowStates.set(jid, state);
+
+      // Envia a mensagem do novo nó
+      await sock.sendMessage(jid, { text: targetNode.text });
+      stats.totalSent++;
+      broadcastStats();
+    } else {
+      // Se o nó alvo não existe (link quebrado), avisa e reseta
+      logToUI('SYSTEM', `Aviso: Link de fluxo quebrado para o nó ${matchedOption.targetNodeId}`);
+      state.currentNodeId = 'main';
+      salesFlowStates.set(jid, state);
+      const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
+      if (mainNode) {
+        await sock.sendMessage(jid, { text: `Desculpe, ocorreu um erro na navegação do menu. Retornando ao menu principal.\n\n${mainNode.text}` });
+        stats.totalSent++;
+        broadcastStats();
+      }
+    }
+  } else {
+    // Opção inválida digitada: envia aviso e repete o nó atual
+    await sock.sendMessage(jid, { text: `⚠️ *Opção inválida!* Por favor, digite uma das opções numéricas válidas.\n\n${currentNode.text}` });
+    stats.totalSent++;
+    broadcastStats();
+  }
+
+  return true;
 }
 
 // --- Gerenciador de IA (Gemini + N8N Tools) ---
@@ -1279,6 +1482,55 @@ ipcMain.handle('billing-trigger-now', async (event, id) => {
     }
   }
   throw new Error('Cobrança não encontrada ou WhatsApp desconectado.');
+});
+
+// IPCs do Robô de Vendas
+ipcMain.handle('sales-node-save', (event, nodeData) => {
+  if (!settings.salesFlow) settings.salesFlow = { nodes: [] };
+  if (!settings.salesFlow.nodes) settings.salesFlow.nodes = [];
+  
+  const existingIdx = nodeData.id ? settings.salesFlow.nodes.findIndex(n => n.id === nodeData.id) : -1;
+  
+  const newNode = {
+    id: nodeData.id || `node-${Date.now()}`,
+    name: nodeData.name.trim(),
+    text: nodeData.text.trim(),
+    action: nodeData.action || 'none',
+    options: nodeData.options || []
+  };
+  
+  if (existingIdx !== -1) {
+    settings.salesFlow.nodes[existingIdx] = newNode;
+  } else {
+    settings.salesFlow.nodes.push(newNode);
+  }
+  
+  saveSettings({ salesFlow: settings.salesFlow });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('sales-flow-update', settings.salesFlow);
+  }
+  
+  logToUI('SYSTEM', `Nó do fluxo de vendas salvo com sucesso: ${newNode.name} (ID: ${newNode.id})`);
+  return true;
+});
+
+ipcMain.handle('sales-node-delete', (event, id) => {
+  if (!settings.salesFlow || !settings.salesFlow.nodes) return false;
+  
+  // Impedir a exclusão do nó principal 'main' por segurança
+  if (id === 'main') {
+    throw new Error('O menu principal (main) não pode ser excluído.');
+  }
+
+  settings.salesFlow.nodes = settings.salesFlow.nodes.filter(n => n.id !== id);
+  saveSettings({ salesFlow: settings.salesFlow });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('sales-flow-update', settings.salesFlow);
+  }
+  logToUI('SYSTEM', `Nó de menu excluído (ID: ${id})`);
+  return true;
 });
 
 ipcMain.on('log-error-to-main', (event, err) => {

@@ -52,6 +52,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initBillingUI();
   renderBillingsTable();
 
+  // Inicializar Robô de Vendas UI
+  initSalesBotUI();
+  renderNodesTable();
+
   // Inicializar Console de Logs
   initConsoleUI();
 
@@ -97,6 +101,7 @@ async function loadAndDisplaySettings() {
 
   // Preencher formulário de IA
   document.getElementById('ai-active-toggle').checked = currentSettings.aiEnabled;
+  document.getElementById('sales-bot-active-toggle').checked = currentSettings.salesBotEnabled || false;
   document.getElementById('gemini-key').value = currentSettings.geminiApiKey || '';
   document.getElementById('gemini-model').value = currentSettings.geminiModel || 'gemini-2.0-flash';
   document.getElementById('system-prompt').value = currentSettings.systemPrompt || '';
@@ -1198,6 +1203,257 @@ async function deleteBilling(id) {
     currentSettings = await window.api.getSettings();
     renderBillingsTable();
     resetBillingForm();
+  }
+}
+
+// --- Robô de Vendas UI ---
+function initSalesBotUI() {
+  const toggle = document.getElementById('sales-bot-active-toggle');
+  const nodeForm = document.getElementById('sales-node-form');
+  const btnCancelNode = document.getElementById('btn-cancel-node-edit');
+  const btnAddOption = document.getElementById('btn-add-node-option');
+  const optionsList = document.getElementById('node-options-list');
+
+  const clientNameInput = document.getElementById('node-name');
+  const idValInput = document.getElementById('node-id-val');
+  const textInput = document.getElementById('node-text');
+  const actionSelect = document.getElementById('node-action');
+
+  // Toggle ativação do Robô
+  toggle.addEventListener('change', async () => {
+    const success = await window.api.saveSettings({ salesBotEnabled: toggle.checked });
+    if (success) {
+      currentSettings.salesBotEnabled = toggle.checked;
+    } else {
+      alert('Erro ao atualizar estado do Robô.');
+      toggle.checked = !toggle.checked;
+    }
+  });
+
+  // Botão Adicionar Dígito
+  btnAddOption.addEventListener('click', () => {
+    addOptionRow();
+  });
+
+  // Botão Cancelar Edição
+  btnCancelNode.addEventListener('click', resetSalesNodeForm);
+
+  // Envio do formulário
+  nodeForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const editId = document.getElementById('node-edit-id').value;
+    const name = clientNameInput.value.trim();
+    const idVal = idValInput.value.trim().toLowerCase().replace(/\s+/g, '-');
+    const text = textInput.value;
+    const action = actionSelect.value;
+
+    // Extrair opções do teclado do robô
+    const options = [];
+    const rows = optionsList.querySelectorAll('.option-row');
+    rows.forEach(row => {
+      const trigger = row.querySelector('.option-trigger').value.trim();
+      const targetNodeId = row.querySelector('.option-target').value;
+      if (trigger && targetNodeId) {
+        options.push({ trigger, targetNodeId });
+      }
+    });
+
+    const nodeData = {
+      id: editId || idVal, // Se for edição usa o id original, senão usa o valor digitado
+      name,
+      text,
+      action,
+      options
+    };
+
+    // Validar se o ID não possui caracteres especiais inválidos
+    if (!/^[a-z0-9_-]+$/.test(nodeData.id)) {
+      alert('O ID do menu deve conter apenas letras minúsculas, números, hífens (-) ou subtrassos (_).');
+      return;
+    }
+
+    try {
+      const success = await window.api.saveSalesNode(nodeData);
+      if (success) {
+        currentSettings = await window.api.getSettings();
+        renderNodesTable();
+        resetSalesNodeForm();
+      }
+    } catch (err) {
+      alert(`Erro ao salvar menu: ${err.message}`);
+    }
+  });
+
+  // Ouvinte IPC para atualizações em tempo real
+  window.api.onSalesFlowUpdate((salesFlow) => {
+    currentSettings.salesFlow = salesFlow;
+    renderNodesTable();
+  });
+}
+
+function addOptionRow(triggerVal = '', targetVal = '') {
+  const container = document.getElementById('node-options-list');
+  const row = document.createElement('div');
+  row.className = 'option-row';
+  row.style = 'display: flex; gap: 8px; align-items: center;';
+
+  // Opções dinâmicas para o dropdown
+  let targetOptionsHTML = '<option value="" disabled selected>Ir para...</option>';
+  const nodes = currentSettings?.salesFlow?.nodes || [];
+  nodes.forEach(n => {
+    targetOptionsHTML += `<option value="${escapeHtml(n.id)}">${escapeHtml(n.name)} (${escapeHtml(n.id)})</option>`;
+  });
+
+  row.innerHTML = `
+    <input type="text" placeholder="Dígito" class="option-trigger" value="${escapeHtml(triggerVal)}" required style="width: 80px; padding: 6px; font-size: 13px;">
+    <select class="option-target" required style="flex: 1; padding: 6px; font-size: 13px; color: var(--text-dark);">
+      ${targetOptionsHTML}
+    </select>
+    <button type="button" class="btn btn-danger btn-sm btn-delete-option" style="padding: 4px 6px; margin: 0; line-height: 1;">✖</button>
+  `;
+
+  if (targetVal) {
+    row.querySelector('.option-target').value = targetVal;
+  }
+
+  row.querySelector('.btn-delete-option').addEventListener('click', () => {
+    row.remove();
+  });
+
+  container.appendChild(row);
+}
+
+function renderNodesTable() {
+  const tbody = document.getElementById('nodes-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const list = currentSettings?.salesFlow?.nodes || [];
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-table">Nenhum nó de menu cadastrado ainda.</td></tr>`;
+    return;
+  }
+
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+
+    // Formatar texto da ação
+    let actionBadge = '';
+    if (item.action === 'transfer_to_ai') {
+      actionBadge = `<span class="badge" style="background-color: rgba(6, 182, 212, 0.15); color: var(--info); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Transferir IA 🤖</span>`;
+    } else if (item.action === 'transfer_to_human') {
+      actionBadge = `<span class="badge" style="background-color: rgba(139, 92, 246, 0.15); color: #c084fc; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Transferir Humano 👤</span>`;
+    } else {
+      actionBadge = `<span class="badge" style="background-color: rgba(255, 255, 255, 0.05); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-weight: 500; font-size: 11px;">Apenas Mensagem</span>`;
+    }
+
+    // Formatar teclas associadas
+    let optionsBadges = '';
+    if (item.options && item.options.length > 0) {
+      item.options.forEach(opt => {
+        optionsBadges += `<span class="badge" style="background: rgba(255, 255, 255, 0.06); padding: 3px 6px; border-radius: 4px; font-size:10px; margin-right:4px; display:inline-block; margin-bottom: 2px;" title="Ir para nó ${opt.targetNodeId}"><strong>${escapeHtml(opt.trigger)}</strong> ➡️ ${escapeHtml(opt.targetNodeId)}</span>`;
+      });
+    } else {
+      optionsBadges = `<span style="font-size:11px; color:var(--text-muted);">Sem opções</span>`;
+    }
+
+    const truncatedText = item.text.length > 80 ? item.text.substring(0, 77) + '...' : item.text;
+
+    tr.innerHTML = `
+      <td>
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size:13px; font-weight:600; color:#fff;">${escapeHtml(item.name)}</span>
+          <span style="font-size:10px; font-family:var(--font-mono); color:var(--text-muted); margin-top:2px;">ID: ${escapeHtml(item.id)}</span>
+        </div>
+      </td>
+      <td title="${escapeHtml(item.text)}">${escapeHtml(truncatedText)}</td>
+      <td>${actionBadge}</td>
+      <td>${optionsBadges}</td>
+      <td style="text-align: center;">
+        <button class="btn btn-secondary btn-sm btn-edit-node" data-id="${item.id}" style="margin-right: 6px;">Editar</button>
+        <button class="btn btn-danger btn-sm btn-delete-node" data-id="${item.id}" ${item.id === 'main' ? 'disabled title="O menu principal não pode ser excluído"' : ''}>Excluir</button>
+      </td>
+    `;
+
+    // Ouvintes
+    tr.querySelector('.btn-edit-node').addEventListener('click', () => editSalesNode(item.id));
+    tr.querySelector('.btn-delete-node').addEventListener('click', () => deleteSalesNode(item.id));
+
+    tbody.appendChild(tr);
+  });
+}
+
+function resetSalesNodeForm() {
+  document.getElementById('node-edit-id').value = '';
+  document.getElementById('sales-node-form').reset();
+  
+  // Re-habilitar o input ID
+  const idInput = document.getElementById('node-id-val');
+  idInput.disabled = false;
+  idInput.style.opacity = '1';
+
+  document.getElementById('node-options-list').innerHTML = '';
+  
+  document.getElementById('sales-node-form-title').textContent = 'Cadastrar Novo Menu';
+  document.getElementById('btn-save-node').textContent = 'Salvar Menu';
+  document.getElementById('btn-cancel-node-edit').style.display = 'none';
+}
+
+function editSalesNode(id) {
+  const item = currentSettings.salesFlow.nodes.find(n => n.id === id);
+  if (!item) return;
+
+  document.getElementById('node-edit-id').value = item.id;
+  document.getElementById('node-name').value = item.name;
+  
+  const idInput = document.getElementById('node-id-val');
+  idInput.value = item.id;
+  
+  // Impedir renomeação do nó principal 'main'
+  if (item.id === 'main') {
+    idInput.disabled = true;
+    idInput.style.opacity = '0.5';
+  } else {
+    idInput.disabled = false;
+    idInput.style.opacity = '1';
+  }
+
+  document.getElementById('node-text').value = item.text;
+  document.getElementById('node-action').value = item.action || 'none';
+
+  // Popular opções do teclado
+  const optionsList = document.getElementById('node-options-list');
+  optionsList.innerHTML = '';
+
+  if (item.options && item.options.length > 0) {
+    item.options.forEach(opt => {
+      addOptionRow(opt.trigger, opt.targetNodeId);
+    });
+  }
+
+  document.getElementById('sales-node-form-title').textContent = 'Editar Menu';
+  document.getElementById('btn-save-node').textContent = 'Salvar Alterações';
+  document.getElementById('btn-cancel-node-edit').style.display = 'inline-flex';
+}
+
+async function deleteSalesNode(id) {
+  if (id === 'main') {
+    alert('O menu principal (main) não pode ser excluído.');
+    return;
+  }
+  if (!confirm('Tem certeza que deseja excluir este nó de menu? Links associados a ele em outros nós podem falhar.')) return;
+
+  try {
+    const success = await window.api.deleteSalesNode(id);
+    if (success) {
+      currentSettings = await window.api.getSettings();
+      renderNodesTable();
+      resetSalesNodeForm();
+    }
+  } catch (err) {
+    alert(`Erro ao excluir nó: ${err.message}`);
   }
 }
 
