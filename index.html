@@ -75,6 +75,13 @@
           </svg>
           Agendador
         </button>
+        <button class="nav-item" data-tab="billing">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2" ry="2"/>
+            <line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+          Cobranças
+        </button>
         <button class="nav-item" data-tab="console">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"/>
@@ -634,6 +641,104 @@
               </div>
             </div>
 
+          </div>
+        </section>
+
+        <!-- ABA: COBRANÇAS -->
+        <section class="tab-panel" id="billing-panel">
+          <div class="scheduler-container">
+            <!-- Formulário de Cobrança -->
+            <div class="panel-section side-panel" style="flex: 1; max-width: 420px;">
+              <h3 id="billing-form-title">Cadastrar Nova Cobrança</h3>
+              <form id="billing-form" style="display: flex; flex-direction: column; gap: 12px;">
+                <input type="hidden" id="bill-edit-id" value="">
+                
+                <div class="form-group">
+                  <label for="bill-client-name">Nome do Cliente</label>
+                  <input type="text" id="bill-client-name" placeholder="ex: João Silva" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="bill-client-phone">Celular do Cliente (com DDI+DDD)</label>
+                  <input type="text" id="bill-client-phone" placeholder="ex: 5511999999999" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="bill-amount">Valor da Cobrança</label>
+                  <input type="text" id="bill-amount" placeholder="ex: R$ 150,00" required>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 8px;">
+                  <div class="form-group" style="flex: 1;">
+                    <label for="bill-due-date">Data de Vencimento</label>
+                    <input type="date" id="bill-due-date" required>
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label for="bill-due-time">Hora do Envio</label>
+                    <input type="time" id="bill-due-time" value="09:00" required>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="bill-template-select">Template de Mensagem</label>
+                  <select id="bill-template-select">
+                    <option value="custom" selected>Personalizado (Campo Livre)</option>
+                    <option value="reminder">Template 1: Lembrete Próximo</option>
+                    <option value="due_today">Template 2: Vencimento Hoje</option>
+                    <option value="overdue">Template 3: Notificação de Atraso</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="bill-message">Mensagem de Cobrança</label>
+                  <textarea id="bill-message" rows="4" placeholder="Escreva a mensagem de cobrança..." required></textarea>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 10px;">
+                  <label>Anexo / Fatura (Opcional)</label>
+                  <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-select-bill-file" style="padding: 8px 12px; margin: 0; white-space: nowrap;">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; display: inline-block; vertical-align: middle;">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                      </svg>
+                      Selecionar Arquivo
+                    </button>
+                    <span id="bill-file-name" style="font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">Nenhum arquivo</span>
+                    <button type="button" class="btn btn-danger btn-sm" id="btn-remove-bill-file" style="display: none; padding: 4px 6px; margin: 0; line-height: 1;">✖</button>
+                  </div>
+                  <input type="hidden" id="bill-file-path" value="">
+                </div>
+
+                <div class="form-group-button" style="margin-top: 8px; display: flex; gap: 8px;">
+                  <button type="submit" class="btn btn-primary" id="btn-save-bill" style="flex: 1;">Salvar Cobrança</button>
+                  <button type="button" class="btn btn-secondary" id="btn-cancel-bill-edit" style="display:none;">Cancelar</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Listagem de Cobranças -->
+            <div class="panel-section flex-1">
+              <h3>Painel de Cobranças e Faturas</h3>
+              <div class="tools-table-container">
+                <table class="tools-table" id="billings-table">
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Celular</th>
+                      <th>Valor</th>
+                      <th>Vencimento / Envio</th>
+                      <th>Anexo / Status</th>
+                      <th style="width: 250px; text-align: center;">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="billings-table-body">
+                    <tr>
+                      <td colspan="6" class="empty-table">Nenhuma fatura de cobrança cadastrada ainda.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 

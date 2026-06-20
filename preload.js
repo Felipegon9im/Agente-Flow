@@ -34,6 +34,12 @@ contextBridge.exposeInMainWorld('api', {
   createAppointment: (data) => ipcRenderer.invoke('appointment-create', data),
   onAppointmentsUpdate: (callback) => ipcRenderer.on('appointments-update', (event, list) => callback(list)),
 
+  // Sistema de Cobrança
+  saveBilling: (billingData) => ipcRenderer.invoke('billing-save', billingData),
+  deleteBilling: (id) => ipcRenderer.invoke('billing-delete', id),
+  triggerBillingNow: (id) => ipcRenderer.invoke('billing-trigger-now', id),
+  onBillingsUpdate: (callback) => ipcRenderer.on('billings-update', (event, list) => callback(list)),
+
   // Debug / Logs de Erros do Renderer
   logError: (err) => ipcRenderer.send('log-error-to-main', err)
 });

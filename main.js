@@ -145,7 +145,8 @@ function loadSettings() {
     workingHoursStart: '09:00',
     workingHoursEnd: '18:00',
     slotDuration: 60,
-    appointments: []
+    appointments: [],
+    billings: []
   };
 
   try {
@@ -674,6 +675,58 @@ function checkAppointmentReminders() {
   }
 }
 
+async function checkBillingReminders() {
+  if (!settings.billings || settings.billings.length === 0) return;
+  if (!sock || connectionStatus !== 'connected') return;
+
+  const now = new Date();
+  let updated = false;
+
+  for (const bill of settings.billings) {
+    if (bill.status !== 'pending') continue;
+
+    try {
+      const [year, month, day] = bill.dueDate.split('-').map(Number);
+      const [hours, minutes] = (bill.dueTime || '09:00').split(':').map(Number);
+      const triggerDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+      // Se a data/hora atual é maior ou igual ao horário do gatilho
+      if (now.getTime() >= triggerDate.getTime()) {
+        logToUI('SYSTEM', `Disparando lembrete de cobrança automático (ID: ${bill.id}) para ${bill.clientName}`);
+        
+        let targetJid = bill.clientPhone.trim();
+        if (!targetJid.includes('@')) {
+          targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
+        }
+
+        try {
+          await sendWhatsAppMessageWithMedia(targetJid, bill.message, bill.filePath);
+          bill.status = 'sent';
+          bill.sentAt = Date.now();
+          updated = true;
+          stats.totalSent++;
+          broadcastStats();
+          logToUI('WHATSAPP', `Cobrança enviada com sucesso para ${bill.clientName} (${bill.clientPhone})`);
+        } catch (sendErr) {
+          logToUI('SYSTEM', `Erro ao enviar cobrança (ID: ${bill.id}): ${sendErr.message}`);
+          bill.status = 'failed';
+          updated = true;
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao processar cobrança automática:', err);
+    }
+  }
+
+  if (updated) {
+    saveSettings({ billings: settings.billings });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('billings-update', settings.billings);
+    }
+  }
+}
+
+
 // --- Motor de Agendamento Nativo ---
 function calculateNextRun(schedule) {
   if (schedule.type === 'interval') {
@@ -800,6 +853,9 @@ app.whenReady().then(() => {
 
   // Iniciar Loop de Lembretes de Consulta (Verifica a cada 60 segundos)
   setInterval(checkAppointmentReminders, 60000);
+
+  // Iniciar Loop de Lembretes de Cobrança (Verifica a cada 60 segundos)
+  setInterval(checkBillingReminders, 60000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -1140,6 +1196,89 @@ ipcMain.handle('appointment-create', async (event, { name, phone, date, time }) 
     logToUI('SYSTEM', `Erro ao criar agendamento manual: ${err.message}`);
     return { success: false, error: err.message };
   }
+});
+
+// IPCs do Sistema de Cobrança
+ipcMain.handle('billing-save', (event, billingData) => {
+  if (!settings.billings) settings.billings = [];
+  
+  const existingIdx = billingData.id ? settings.billings.findIndex(b => b.id === billingData.id) : -1;
+  
+  const newBilling = {
+    id: billingData.id || `bill-${Date.now()}`,
+    clientName: billingData.clientName.trim(),
+    clientPhone: billingData.clientPhone.trim(),
+    amount: billingData.amount.trim(),
+    dueDate: billingData.dueDate.trim(),
+    dueTime: billingData.dueTime ? billingData.dueTime.trim() : '09:00',
+    message: billingData.message.trim(),
+    filePath: billingData.filePath || '',
+    status: billingData.status || 'pending',
+    sentAt: billingData.sentAt || null
+  };
+  
+  if (existingIdx !== -1) {
+    settings.billings[existingIdx] = newBilling;
+  } else {
+    settings.billings.push(newBilling);
+  }
+  
+  saveSettings({ billings: settings.billings });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('billings-update', settings.billings);
+  }
+  
+  logToUI('SYSTEM', `Cobrança salva com sucesso (ID: ${newBilling.id})`);
+  return true;
+});
+
+ipcMain.handle('billing-delete', (event, id) => {
+  if (!settings.billings) return false;
+  settings.billings = settings.billings.filter(b => b.id !== id);
+  saveSettings({ billings: settings.billings });
+  
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('billings-update', settings.billings);
+  }
+  logToUI('SYSTEM', `Cobrança excluída (ID: ${id})`);
+  return true;
+});
+
+ipcMain.handle('billing-trigger-now', async (event, id) => {
+  const list = settings.billings || [];
+  const bill = list.find(b => b.id === id);
+  if (bill && sock && connectionStatus === 'connected') {
+    logToUI('SYSTEM', `Gatilho manual disparado para cobrança (ID: ${id})`);
+    try {
+      let targetJid = bill.clientPhone.trim();
+      if (!targetJid.includes('@')) {
+        targetJid = `${targetJid.replace(/\D/g, '')}@s.whatsapp.net`;
+      }
+      
+      await sendWhatsAppMessageWithMedia(targetJid, bill.message, bill.filePath);
+      bill.status = 'sent';
+      bill.sentAt = Date.now();
+      saveSettings({ billings: list });
+      
+      stats.totalSent++;
+      broadcastStats();
+      
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('billings-update', list);
+      }
+      return true;
+    } catch (err) {
+      logToUI('SYSTEM', `Erro no disparo manual da cobrança ${id}: ${err.message}`);
+      bill.status = 'failed';
+      saveSettings({ billings: list });
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('billings-update', list);
+      }
+      throw err;
+    }
+  }
+  throw new Error('Cobrança não encontrada ou WhatsApp desconectado.');
 });
 
 ipcMain.on('log-error-to-main', (event, err) => {

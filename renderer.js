@@ -48,6 +48,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAgendaUI();
   renderAppointmentsTable();
 
+  // Inicializar Sistema de Cobrança UI
+  initBillingUI();
+  renderBillingsTable();
+
   // Inicializar Console de Logs
   initConsoleUI();
 
@@ -932,6 +936,268 @@ async function deleteSchedule(id) {
     currentSettings = await window.api.getSettings();
     renderSchedulesTable();
     resetSchedulerForm();
+  }
+}
+
+// --- Sistema de Cobrança UI ---
+function initBillingUI() {
+  const billForm = document.getElementById('billing-form');
+  const btnCancel = document.getElementById('btn-cancel-bill-edit');
+  const btnSave = document.getElementById('btn-save-bill');
+  const btnSelectBillFile = document.getElementById('btn-select-bill-file');
+  const btnRemoveBillFile = document.getElementById('btn-remove-bill-file');
+  const spanBillFileName = document.getElementById('bill-file-name');
+  const inputBillFilePath = document.getElementById('bill-file-path');
+
+  const clientNameInput = document.getElementById('bill-client-name');
+  const amountInput = document.getElementById('bill-amount');
+  const dueDateInput = document.getElementById('bill-due-date');
+  const templateSelect = document.getElementById('bill-template-select');
+  const messageTextarea = document.getElementById('bill-message');
+
+  // Lógica para aplicar template dinamicamente
+  function applyBillingTemplate() {
+    const templateType = templateSelect.value;
+    if (templateType === 'custom') return;
+
+    const name = clientNameInput.value.trim() || '[Nome do Cliente]';
+    const amount = amountInput.value.trim() || '[Valor]';
+    const rawDate = dueDateInput.value;
+    
+    let formattedDate = '[Data de Vencimento]';
+    if (rawDate) {
+      const parts = rawDate.split('-');
+      if (parts.length === 3) {
+        formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+
+    let templateText = '';
+    if (templateType === 'reminder') {
+      templateText = `Olá, *${name}*! 🔔\n\nEste é um lembrete amigável de que a sua fatura no valor de *${amount}* tem vencimento em *${formattedDate}*.\n\nCaso precise da segunda via ou do código de barras/PIX, por favor nos avise.\n\nAgradecemos a parceria! 🤝`;
+    } else if (templateType === 'due_today') {
+      templateText = `Olá, *${name}*! Hoje é o dia do vencimento da sua fatura no valor de *${amount}* (Vence em *${formattedDate}*).\n\nPara facilitar o pagamento, você pode utilizar o PIX ou o arquivo anexo.\n\nQualquer dúvida, estamos à disposição! 💳`;
+    } else if (templateType === 'overdue') {
+      templateText = `Atenção, *${name}*! ⚠️\n\nNotamos que a fatura no valor de *${amount}*, que venceu em *${formattedDate}*, ainda não consta como paga no nosso sistema.\n\nPedimos a gentileza de verificar. Caso já tenha realizado o pagamento, por favor desconsidere esta mensagem.\n\nFicamos no aguardo! 💼`;
+    }
+
+    messageTextarea.value = templateText;
+  }
+
+  // Ouvintes para atualização automática do template
+  clientNameInput.addEventListener('input', applyBillingTemplate);
+  amountInput.addEventListener('input', applyBillingTemplate);
+  dueDateInput.addEventListener('change', applyBillingTemplate);
+  templateSelect.addEventListener('change', applyBillingTemplate);
+
+  // Se o usuário editar a mensagem manualmente, muda para "customizado" para não sobrescrever
+  messageTextarea.addEventListener('input', () => {
+    templateSelect.value = 'custom';
+  });
+
+  // Selecionar arquivo fatura/comprovante
+  btnSelectBillFile.addEventListener('click', async () => {
+    const filePath = await window.api.selectFile();
+    if (filePath) {
+      inputBillFilePath.value = filePath;
+      const name = filePath.split(/[\\/]/).pop();
+      spanBillFileName.textContent = name;
+      btnRemoveBillFile.style.display = 'inline-block';
+    }
+  });
+
+  // Remover arquivo fatura/comprovante
+  btnRemoveBillFile.addEventListener('click', () => {
+    inputBillFilePath.value = '';
+    spanBillFileName.textContent = 'Nenhum arquivo';
+    btnRemoveBillFile.style.display = 'none';
+  });
+
+  // Submeter formulário de salvamento/edição
+  billForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('bill-edit-id').value;
+    const clientName = clientNameInput.value.trim();
+    const clientPhone = document.getElementById('bill-client-phone').value.trim();
+    const amount = amountInput.value.trim();
+    const dueDate = dueDateInput.value;
+    const dueTime = document.getElementById('bill-due-time').value;
+    const message = messageTextarea.value;
+    const filePath = inputBillFilePath.value;
+
+    const billingData = {
+      id: id || undefined,
+      clientName,
+      clientPhone,
+      amount,
+      dueDate,
+      dueTime,
+      message,
+      filePath
+    };
+
+    const success = await window.api.saveBilling(billingData);
+    if (success) {
+      currentSettings = await window.api.getSettings();
+      renderBillingsTable();
+      resetBillingForm();
+    } else {
+      alert('Erro ao salvar fatura de cobrança.');
+    }
+  });
+
+  // Cancelar Edição
+  btnCancel.addEventListener('click', resetBillingForm);
+
+  // Escutar atualizações de cobranças vindas do processo principal
+  window.api.onBillingsUpdate((list) => {
+    currentSettings.billings = list;
+    renderBillingsTable();
+  });
+}
+
+function renderBillingsTable() {
+  const tbody = document.getElementById('billings-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const list = currentSettings?.billings || [];
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-table">Nenhuma fatura de cobrança cadastrada ainda.</td></tr>`;
+    return;
+  }
+
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+
+    // Formatar data para exibição brasileira
+    let displayDate = item.dueDate;
+    if (item.dueDate) {
+      const parts = item.dueDate.split('-');
+      if (parts.length === 3) {
+        displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    }
+
+    const dueText = `${displayDate} às ${item.dueTime || '09:00'}`;
+
+    // Construção da tag de status
+    let statusBadge = '';
+    if (item.status === 'sent') {
+      const sentTime = item.sentAt ? new Date(item.sentAt).toLocaleTimeString() + ' ' + new Date(item.sentAt).toLocaleDateString() : '';
+      statusBadge = `<span class="badge" style="background-color: rgba(16, 185, 129, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;" title="Enviado às ${sentTime}">Enviado</span>`;
+    } else if (item.status === 'failed') {
+      statusBadge = `<span class="badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--danger); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Falhou</span>`;
+    } else {
+      statusBadge = `<span class="badge" style="background-color: rgba(245, 158, 11, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">Pendente</span>`;
+    }
+
+    // Arquivo anexo se houver
+    let fileDisplay = '';
+    if (item.filePath) {
+      const fileName = item.filePath.split(/[\\/]/).pop();
+      fileDisplay = `<div style="display:flex; align-items:center; gap:4px; margin-bottom: 4px;" title="${escapeHtml(item.filePath)}">
+        <span style="font-size:14px; line-height: 1;">📎</span>
+        <span style="font-size:11px; color:var(--primary-color); font-weight:600; text-decoration:underline; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100px;">${escapeHtml(fileName)}</span>
+      </div>`;
+    }
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(item.clientName)}</strong></td>
+      <td><span style="font-size:11px; font-family:var(--font-mono);">${escapeHtml(item.clientPhone)}</span></td>
+      <td><strong style="color: var(--success);">${escapeHtml(item.amount)}</strong></td>
+      <td><span style="font-size:11px; font-weight:500;">${dueText}</span></td>
+      <td>
+        <div style="display:flex; flex-direction:column; align-items:flex-start;">
+          ${fileDisplay}
+          ${statusBadge}
+        </div>
+      </td>
+      <td style="text-align: center;">
+        <button class="btn ${item.status === 'sent' ? 'btn-secondary' : 'btn-primary'} btn-sm btn-run-bill" data-id="${item.id}" style="margin-right: 6px;">
+          ${item.status === 'sent' ? 'Reenviar' : 'Disparar Agora'}
+        </button>
+        <button class="btn btn-secondary btn-sm btn-edit-bill" data-id="${item.id}" style="margin-right: 6px;">Editar</button>
+        <button class="btn btn-danger btn-sm btn-delete-bill" data-id="${item.id}">Excluir</button>
+      </td>
+    `;
+
+    // Associar ouvintes
+    tr.querySelector('.btn-run-bill').addEventListener('click', () => triggerBillingNow(item.id));
+    tr.querySelector('.btn-edit-bill').addEventListener('click', () => editBilling(item.id));
+    tr.querySelector('.btn-delete-bill').addEventListener('click', () => deleteBilling(item.id));
+
+    tbody.appendChild(tr);
+  });
+}
+
+function resetBillingForm() {
+  document.getElementById('bill-edit-id').value = '';
+  document.getElementById('billing-form').reset();
+  document.getElementById('bill-due-time').value = '09:00';
+  document.getElementById('bill-template-select').value = 'custom';
+
+  document.getElementById('bill-file-path').value = '';
+  document.getElementById('bill-file-name').textContent = 'Nenhum arquivo';
+  document.getElementById('btn-remove-bill-file').style.display = 'none';
+
+  document.getElementById('billing-form-title').textContent = 'Cadastrar Nova Cobrança';
+  document.getElementById('btn-save-bill').textContent = 'Salvar Cobrança';
+  document.getElementById('btn-cancel-bill-edit').style.display = 'none';
+}
+
+async function triggerBillingNow(id) {
+  try {
+    const success = await window.api.triggerBillingNow(id);
+    if (success) {
+      alert('Aviso de cobrança enviado com sucesso!');
+      currentSettings = await window.api.getSettings();
+      renderBillingsTable();
+    }
+  } catch (err) {
+    alert(`Erro ao disparar cobrança: ${err.message}`);
+  }
+}
+
+function editBilling(id) {
+  const item = currentSettings.billings.find(b => b.id === id);
+  if (!item) return;
+
+  document.getElementById('bill-edit-id').value = item.id;
+  document.getElementById('bill-client-name').value = item.clientName;
+  document.getElementById('bill-client-phone').value = item.clientPhone;
+  document.getElementById('bill-amount').value = item.amount;
+  document.getElementById('bill-due-date').value = item.dueDate;
+  document.getElementById('bill-due-time').value = item.dueTime || '09:00';
+  document.getElementById('bill-message').value = item.message;
+  document.getElementById('bill-template-select').value = 'custom'; // Deixar customizado para não sobrescrever os dados carregados
+
+  if (item.filePath) {
+    document.getElementById('bill-file-path').value = item.filePath;
+    const name = item.filePath.split(/[\\/]/).pop();
+    document.getElementById('bill-file-name').textContent = name;
+    document.getElementById('btn-remove-bill-file').style.display = 'inline-block';
+  } else {
+    document.getElementById('bill-file-path').value = '';
+    document.getElementById('bill-file-name').textContent = 'Nenhum arquivo';
+    document.getElementById('btn-remove-bill-file').style.display = 'none';
+  }
+
+  document.getElementById('billing-form-title').textContent = 'Editar Cobrança';
+  document.getElementById('btn-save-bill').textContent = 'Salvar Alterações';
+  document.getElementById('btn-cancel-bill-edit').style.display = 'inline-flex';
+}
+
+async function deleteBilling(id) {
+  if (!confirm('Deseja realmente remover esta cobrança?')) return;
+
+  const success = await window.api.deleteBilling(id);
+  if (success) {
+    currentSettings = await window.api.getSettings();
+    renderBillingsTable();
+    resetBillingForm();
   }
 }
 
