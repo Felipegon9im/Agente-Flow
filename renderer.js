@@ -1219,6 +1219,29 @@ function initSalesBotUI() {
   const textInput = document.getElementById('node-text');
   const actionSelect = document.getElementById('node-action');
 
+  const btnSelectNodeFile = document.getElementById('btn-select-node-file');
+  const btnRemoveNodeFile = document.getElementById('btn-remove-node-file');
+  const spanNodeFileName = document.getElementById('node-file-name');
+  const inputNodeFilePath = document.getElementById('node-file-path');
+
+  // Selecionar arquivo
+  btnSelectNodeFile.addEventListener('click', async () => {
+    const filePath = await window.api.selectFile();
+    if (filePath) {
+      inputNodeFilePath.value = filePath;
+      const name = filePath.split(/[\\/]/).pop();
+      spanNodeFileName.textContent = name;
+      btnRemoveNodeFile.style.display = 'inline-block';
+    }
+  });
+
+  // Remover arquivo
+  btnRemoveNodeFile.addEventListener('click', () => {
+    inputNodeFilePath.value = '';
+    spanNodeFileName.textContent = 'Nenhum arquivo';
+    btnRemoveNodeFile.style.display = 'none';
+  });
+
   // Toggle ativação do Robô
   toggle.addEventListener('change', async () => {
     const success = await window.api.saveSettings({ salesBotEnabled: toggle.checked });
@@ -1264,6 +1287,7 @@ function initSalesBotUI() {
       name,
       text,
       action,
+      filePath: inputNodeFilePath.value,
       options
     };
 
@@ -1361,6 +1385,15 @@ function renderNodesTable() {
 
     const truncatedText = item.text.length > 80 ? item.text.substring(0, 77) + '...' : item.text;
 
+    let messageDisplay = escapeHtml(truncatedText);
+    if (item.filePath) {
+      const fileName = item.filePath.split(/[\\/]/).pop();
+      messageDisplay = `<div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
+        <span style="font-size:14px; line-height: 1;">📎</span>
+        <span style="font-size:11px; color:var(--primary-color); font-weight:600; text-decoration:underline;" title="${escapeHtml(item.filePath)}">${escapeHtml(fileName)}</span>
+      </div><div style="font-size:12px;">${messageDisplay}</div>`;
+    }
+
     tr.innerHTML = `
       <td>
         <div style="display:flex; flex-direction:column;">
@@ -1368,7 +1401,7 @@ function renderNodesTable() {
           <span style="font-size:10px; font-family:var(--font-mono); color:var(--text-muted); margin-top:2px;">ID: ${escapeHtml(item.id)}</span>
         </div>
       </td>
-      <td title="${escapeHtml(item.text)}">${escapeHtml(truncatedText)}</td>
+      <td title="${escapeHtml(item.text)}">${messageDisplay}</td>
       <td>${actionBadge}</td>
       <td>${optionsBadges}</td>
       <td style="text-align: center;">
@@ -1393,6 +1426,10 @@ function resetSalesNodeForm() {
   const idInput = document.getElementById('node-id-val');
   idInput.disabled = false;
   idInput.style.opacity = '1';
+
+  document.getElementById('node-file-path').value = '';
+  document.getElementById('node-file-name').textContent = 'Nenhum arquivo';
+  document.getElementById('btn-remove-node-file').style.display = 'none';
 
   document.getElementById('node-options-list').innerHTML = '';
   
@@ -1422,6 +1459,17 @@ function editSalesNode(id) {
 
   document.getElementById('node-text').value = item.text;
   document.getElementById('node-action').value = item.action || 'none';
+
+  if (item.filePath) {
+    document.getElementById('node-file-path').value = item.filePath;
+    const name = item.filePath.split(/[\\/]/).pop();
+    document.getElementById('node-file-name').textContent = name;
+    document.getElementById('btn-remove-node-file').style.display = 'inline-block';
+  } else {
+    document.getElementById('node-file-path').value = '';
+    document.getElementById('node-file-name').textContent = 'Nenhum arquivo';
+    document.getElementById('btn-remove-node-file').style.display = 'none';
+  }
 
   // Popular opções do teclado
   const optionsList = document.getElementById('node-options-list');

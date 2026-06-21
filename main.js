@@ -483,7 +483,7 @@ async function handleSalesBotMessage(jid, text) {
     salesFlowStates.set(jid, { currentNodeId: 'main', mode: 'sales' });
     const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
     if (mainNode) {
-      await sock.sendMessage(jid, { text: mainNode.text });
+      await sendWhatsAppMessageWithMedia(jid, mainNode.text, mainNode.filePath);
       stats.totalSent++;
       broadcastStats();
     }
@@ -506,7 +506,7 @@ async function handleSalesBotMessage(jid, text) {
     salesFlowStates.set(jid, state);
     const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
     if (mainNode) {
-      await sock.sendMessage(jid, { text: mainNode.text });
+      await sendWhatsAppMessageWithMedia(jid, mainNode.text, mainNode.filePath);
       stats.totalSent++;
       broadcastStats();
     }
@@ -521,7 +521,7 @@ async function handleSalesBotMessage(jid, text) {
     salesFlowStates.set(jid, state);
     const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
     if (mainNode) {
-      await sock.sendMessage(jid, { text: mainNode.text });
+      await sendWhatsAppMessageWithMedia(jid, mainNode.text, mainNode.filePath);
       stats.totalSent++;
       broadcastStats();
     }
@@ -545,8 +545,8 @@ async function handleSalesBotMessage(jid, text) {
       }
       salesFlowStates.set(jid, state);
 
-      // Envia a mensagem do novo nó
-      await sock.sendMessage(jid, { text: targetNode.text });
+      // Envia a mensagem do novo nó com suporte a mídia
+      await sendWhatsAppMessageWithMedia(jid, targetNode.text, targetNode.filePath);
       stats.totalSent++;
       broadcastStats();
     } else {
@@ -556,13 +556,13 @@ async function handleSalesBotMessage(jid, text) {
       salesFlowStates.set(jid, state);
       const mainNode = settings.salesFlow.nodes.find(n => n.id === 'main');
       if (mainNode) {
-        await sock.sendMessage(jid, { text: `Desculpe, ocorreu um erro na navegação do menu. Retornando ao menu principal.\n\n${mainNode.text}` });
+        await sendWhatsAppMessageWithMedia(jid, `Desculpe, ocorreu um erro na navegação do menu. Retornando ao menu principal.\n\n${mainNode.text}`, mainNode.filePath);
         stats.totalSent++;
         broadcastStats();
       }
     }
   } else {
-    // Opção inválida digitada: envia aviso e repete o nó atual
+    // Opção inválida digitada: envia aviso e repete o nó atual (sem mídia para não repetir anexo)
     await sock.sendMessage(jid, { text: `⚠️ *Opção inválida!* Por favor, digite uma das opções numéricas válidas.\n\n${currentNode.text}` });
     stats.totalSent++;
     broadcastStats();
@@ -1496,6 +1496,7 @@ ipcMain.handle('sales-node-save', (event, nodeData) => {
     name: nodeData.name.trim(),
     text: nodeData.text.trim(),
     action: nodeData.action || 'none',
+    filePath: nodeData.filePath || '',
     options: nodeData.options || []
   };
   
