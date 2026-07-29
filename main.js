@@ -330,7 +330,7 @@ function startExpressServer(port) {
 
 // --- Conexão WhatsApp (Baileys) ---
 async function startWhatsAppConnection() {
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
   
   if (sock) {
     logToUI('WHATSAPP', 'WhatsApp já está inicializado.');
@@ -343,7 +343,20 @@ async function startWhatsAppConnection() {
   try {
     const { state, saveCreds } = await useMultiFileAuthState(authFolder);
 
+    // Buscar versão mais recente do WhatsApp Web para evitar erros de conexão (ex: 405 ou falhas de protocolo)
+    let version = [2, 3000, 1017506973]; // fallback padrão caso falhe a busca
+    try {
+      const fetched = await fetchLatestBaileysVersion();
+      if (fetched && fetched.version) {
+        version = fetched.version;
+        logToUI('WHATSAPP', `Versão do WhatsApp Web obtida com sucesso: ${version.join('.')}`);
+      }
+    } catch (vErr) {
+      logToUI('WHATSAPP', `Aviso: Falha ao obter versão recente do WA Web, usando fallback: ${version.join('.')}. Erro: ${vErr.message}`);
+    }
+
     sock = makeWASocket({
+      version,
       auth: state,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
